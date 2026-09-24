@@ -7,7 +7,33 @@ const BTN_PRIMARY =
 const BTN_SECONDARY =
   "inline-block rounded-lg border border-gray-800 bg-gray-800 px-4 py-2 text-gray-100 transition-colors hover:bg-gray-700";
 const BTN_ICON =
-  "rounded-lg border border-gray-800 px-2.5 py-1.5 text-sm text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100";
+  "inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-lg border border-gray-800 text-sm text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1.5";
+const BTN_PLAY =
+  "inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-lg border border-indigo-800 bg-indigo-950 text-sm text-indigo-300 transition-colors hover:bg-indigo-900 disabled:opacity-50 sm:h-auto sm:w-auto sm:px-2.5 sm:py-1.5";
+
+const ICON_CLASS = "h-4 w-4 flex-shrink-0";
+
+const PlayIcon: FC = () => (
+  <svg class={ICON_CLASS} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path d="M6 4.5v11a.75.75 0 0 0 1.14.64l9-5.5a.75.75 0 0 0 0-1.28l-9-5.5A.75.75 0 0 0 6 4.5Z" />
+  </svg>
+);
+
+const EditIcon: FC = () => (
+  <svg class={ICON_CLASS} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path d="m13.19 3.3 3.51 3.51-9.4 9.4a2 2 0 0 1-.9.52l-3.2.89a.5.5 0 0 1-.62-.62l.89-3.2a2 2 0 0 1 .52-.9l9.2-9.6Zm1.06-1.06a2 2 0 0 1 2.83 0l.68.68a2 2 0 0 1 0 2.83l-.55.55-3.51-3.51.55-.55Z" />
+  </svg>
+);
+
+const DeleteIcon: FC = () => (
+  <svg class={ICON_CLASS} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path
+      fill-rule="evenodd"
+      d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.44c-.8.1-1.6.22-2.38.36a.75.75 0 1 0 .26 1.48l.15-.03.7 10.03A2.75 2.75 0 0 0 7.48 18h5.04a2.75 2.75 0 0 0 2.75-2.53l.7-10.03.15.03a.75.75 0 0 0 .26-1.48c-.78-.14-1.58-.26-2.38-.36v-.44A2.75 2.75 0 0 0 11.25 1h-2.5ZM7.5 3.75c0-.69.56-1.25 1.25-1.25h2.5c.69 0 1.25.56 1.25 1.25v.32a49 49 0 0 0-5 0v-.32ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z"
+      clip-rule="evenodd"
+    />
+  </svg>
+);
 
 function formatDate(iso: string): string {
   const date = new Date(`${iso.replace(" ", "T")}Z`);
@@ -18,7 +44,7 @@ function formatDate(iso: string): string {
 const FileRow: FC<{ file: FileRecord }> = ({ file }) => (
   <div class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-800/40">
     <div class="min-w-0 flex-1">
-      <div class="truncate font-semibold">{file.displayName}</div>
+      <div class="line-clamp-2 break-words font-semibold leading-snug sm:truncate">{file.displayName}</div>
       <div class="truncate text-xs text-gray-400">
         {file.filename} · {formatDate(file.createdAt)}
       </div>
@@ -26,18 +52,39 @@ const FileRow: FC<{ file: FileRecord }> = ({ file }) => (
     <div class="flex flex-shrink-0 gap-1.5">
       <button
         type="button"
-        class="rounded-lg border border-indigo-800 bg-indigo-950 px-2.5 py-1.5 text-sm text-indigo-300 transition-colors hover:bg-indigo-900"
+        class={BTN_PLAY}
         data-action="play"
         data-id={file.id}
         data-name={file.displayName}
+        aria-label="Lire"
+        title="Lire"
       >
-        ▶ Lire
+        <PlayIcon />
+        <span class="hidden sm:inline">Lire</span>
       </button>
-      <button type="button" class={BTN_ICON} data-action="edit" data-id={file.id} data-name={file.displayName}>
-        Renommer
+      <button
+        type="button"
+        class={BTN_ICON}
+        data-action="edit"
+        data-id={file.id}
+        data-name={file.displayName}
+        aria-label="Renommer"
+        title="Renommer"
+      >
+        <EditIcon />
+        <span class="hidden sm:inline">Renommer</span>
       </button>
-      <button type="button" class={BTN_ICON} data-action="delete" data-id={file.id} data-name={file.displayName}>
-        Supprimer
+      <button
+        type="button"
+        class={BTN_ICON}
+        data-action="delete"
+        data-id={file.id}
+        data-name={file.displayName}
+        aria-label="Supprimer"
+        title="Supprimer"
+      >
+        <DeleteIcon />
+        <span class="hidden sm:inline">Supprimer</span>
       </button>
     </div>
   </div>
@@ -104,12 +151,23 @@ const PaginationBar: FC<{ pagination: Pagination; query: string }> = ({ paginati
   );
 };
 
+const RefreshChannelsButton: FC = () => (
+  <button type="button" id="refresh-channels" class={BTN_ICON} title="Rafraîchir les salons" aria-label="Rafraîchir les salons">
+    ↻
+  </button>
+);
+
 const ChannelSelect: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string }> = ({
   guilds,
   defaultChannelId,
 }) => {
   if (guilds.length === 0) {
-    return <p class="text-sm text-gray-500">Aucun salon vocal disponible (bot non connecté ou absent des serveurs).</p>;
+    return (
+      <div class="flex items-center gap-2">
+        <p class="text-sm text-gray-500">Aucun salon vocal disponible (bot non connecté ou absent des serveurs).</p>
+        <RefreshChannelsButton />
+      </div>
+    );
   }
 
   return (
@@ -131,6 +189,7 @@ const ChannelSelect: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string }>
           </optgroup>
         ))}
       </select>
+      <RefreshChannelsButton />
     </div>
   );
 };
@@ -241,6 +300,7 @@ const CLIENT_SCRIPT = `
   }
 
   uploadBtn.addEventListener("click", () => openUploadModal(null));
+  el("refresh-channels").addEventListener("click", reload);
   modalChooseBtn.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
     if (fileInput.files[0]) setModalFile(fileInput.files[0]);

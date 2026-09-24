@@ -7,7 +7,7 @@ import { pipeline } from "node:stream/promises";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { getCurrentUser } from "../auth/session.js";
-import { botGuildsAmong, client } from "../bot.js";
+import { client, guildsSharedWith, isGuildMember } from "../bot.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { listGuildVoiceInfo, pickDefaultChannelId } from "../voice/channels.js";
@@ -201,11 +201,15 @@ filesRoute.post("/:id/play", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const requestedChannelId = typeof body?.channelId === "string" && body.channelId ? body.channelId : undefined;
   const user = getCurrentUser(c);
+  if (!user) {
+    throw new HTTPException(401, { message: "Unauthenticated" });
+  }
+
   const channelId =
     requestedChannelId ??
     pickDefaultChannelId(
-      listGuildVoiceInfo(botGuildsAmong(user?.guildIds ?? [])).flatMap((guild) => guild.channels),
-      user?.userId,
+      listGuildVoiceInfo(await guildsSharedWith(user.userId)).flatMap((guild) => guild.channels),
+      user.userId,
     );
 
   if (!channelId) {
@@ -216,7 +220,7 @@ filesRoute.post("/:id/play", async (c) => {
   if (!channel || !channel.isVoiceBased()) {
     throw new HTTPException(400, { message: "Invalid voice channel" });
   }
-  if (!user?.guildIds.includes(channel.guild.id)) {
+  if (!(await isGuildMember(channel.guild, user.userId))) {
     throw new HTTPException(403, { message: "You are not a member of this server" });
   }
 

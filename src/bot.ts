@@ -16,8 +16,18 @@ export const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates],
 });
 
-export function botGuildsAmong(guildIds: string[]): Guild[] {
-  return guildIds.flatMap((id) => client.guilds.cache.get(id) ?? []);
+/** Asks Discord directly (force: skip the member cache, which is not kept in sync without the GuildMembers intent). */
+export async function isGuildMember(guild: Guild, userId: string): Promise<boolean> {
+  return guild.members.fetch({ user: userId, force: true }).then(
+    () => true,
+    () => false,
+  );
+}
+
+export async function guildsSharedWith(userId: string): Promise<Guild[]> {
+  const guilds = [...client.guilds.cache.values()];
+  const membership = await Promise.all(guilds.map((guild) => isGuildMember(guild, userId)));
+  return guilds.filter((_, index) => membership[index]);
 }
 
 const playCommand = new SlashCommandBuilder()

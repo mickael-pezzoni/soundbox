@@ -95,16 +95,11 @@ authRoute.get("/callback", async (c) => {
   const user = (await userResponse.json()) as { id: string; username: string; global_name?: string | null };
   const guilds = (await guildsResponse.json()) as { id: string }[];
 
-  const sharedGuildIds = guilds.map((guild) => guild.id).filter((id) => client.guilds.cache.has(id));
-  if (sharedGuildIds.length === 0) {
+  if (!guilds.some((guild) => client.guilds.cache.has(guild.id))) {
     throw new HTTPException(403, { message: "Access is restricted to members of a server the bot has joined" });
   }
 
-  const sessionId = createSession({
-    userId: user.id,
-    username: user.global_name ?? user.username,
-    guildIds: sharedGuildIds,
-  });
+  const sessionId = createSession({ userId: user.id, username: user.global_name ?? user.username });
   setCookie(c, SESSION_COOKIE, sessionId, {
     httpOnly: true,
     sameSite: "Lax",
