@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
-import { requireAuth } from "./auth/session.js";
+import { getCurrentUser, requireAuth } from "./auth/session.js";
 import { client } from "./bot.js";
 import { config } from "./config.js";
 import { authRoute } from "./routes/auth.js";
@@ -20,7 +20,10 @@ app.get("/", (c) => {
   const { files, pagination } = listFiles(page, 20);
 
   const guilds = listGuildVoiceInfo(client.guilds.cache.values());
-  const defaultChannelId = pickDefaultChannelId(guilds.flatMap((guild) => guild.channels));
+  const defaultChannelId = pickDefaultChannelId(
+    guilds.flatMap((guild) => guild.channels),
+    getCurrentUser(c)?.userId,
+  );
 
   return c.html(
     <FilesPage files={files} pagination={pagination} guilds={guilds} defaultChannelId={defaultChannelId} />,

@@ -108,7 +108,7 @@ async function handlePlayCommand(interaction: ChatInputCommandInteraction) {
   }
 
   const requestedChannelId = interaction.options.getString("salon");
-  const voiceChannelId = requestedChannelId ?? pickDefaultChannelId(listVoiceChannels(interaction.guild));
+  const voiceChannelId = requestedChannelId ?? pickDefaultChannelId(listVoiceChannels(interaction.guild), interaction.user.id);
 
   if (!voiceChannelId) {
     await interaction.reply({ content: "Aucun salon vocal disponible.", ephemeral: true });

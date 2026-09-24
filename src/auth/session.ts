@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { getCookie } from "hono/cookie";
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { db } from "../db.js";
 
 export const SESSION_COOKIE = "session";
@@ -30,6 +30,11 @@ export function getSession(id: string): SessionUser | undefined {
     .get(id, Date.now()) as { user_id: string; username: string } | undefined;
 
   return row ? { userId: row.user_id, username: row.username } : undefined;
+}
+
+export function getCurrentUser(c: Context): SessionUser | undefined {
+  const sessionId = getCookie(c, SESSION_COOKIE);
+  return sessionId ? getSession(sessionId) : undefined;
 }
 
 export const requireAuth: MiddlewareHandler = async (c, next) => {

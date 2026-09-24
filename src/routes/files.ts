@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { getCurrentUser } from "../auth/session.js";
 import { client } from "../bot.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
@@ -201,7 +202,10 @@ filesRoute.post("/:id/play", async (c) => {
   const requestedChannelId = typeof body?.channelId === "string" && body.channelId ? body.channelId : undefined;
   const channelId =
     requestedChannelId ??
-    pickDefaultChannelId(listGuildVoiceInfo(client.guilds.cache.values()).flatMap((guild) => guild.channels));
+    pickDefaultChannelId(
+      listGuildVoiceInfo(client.guilds.cache.values()).flatMap((guild) => guild.channels),
+      getCurrentUser(c)?.userId,
+    );
 
   if (!channelId) {
     throw new HTTPException(503, { message: "No voice channel available (is the bot connected?)" });
