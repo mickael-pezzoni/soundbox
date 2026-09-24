@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { getCurrentUser, requireAuth } from "./auth/session.js";
-import { client } from "./bot.js";
+import { botGuildsAmong } from "./bot.js";
 import { config } from "./config.js";
 import { authRoute } from "./routes/auth.js";
 import { filesRoute, listFiles } from "./routes/files.js";
@@ -20,10 +20,11 @@ app.get("/", (c) => {
   const query = c.req.query("q")?.trim() ?? "";
   const { files, pagination } = listFiles(page, 20, query);
 
-  const guilds = listGuildVoiceInfo(client.guilds.cache.values());
+  const user = getCurrentUser(c);
+  const guilds = listGuildVoiceInfo(botGuildsAmong(user?.guildIds ?? []));
   const defaultChannelId = pickDefaultChannelId(
     guilds.flatMap((guild) => guild.channels),
-    getCurrentUser(c)?.userId,
+    user?.userId,
   );
 
   return c.html(

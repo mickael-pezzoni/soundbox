@@ -24,7 +24,6 @@ ENV NODE_ENV=production \
 #   DISCORD_TOKEN          (required) bot token
 #   DISCORD_CLIENT_ID      OAuth2 application id
 #   DISCORD_CLIENT_SECRET  OAuth2 client secret
-#   DISCORD_GUILD_ID       id of the server whose members may log in
 # BASE_URL must be the public URL of the site; "<BASE_URL>/auth/callback" must be declared in the Discord developer portal.
 
 COPY --from=build /app/package.json ./

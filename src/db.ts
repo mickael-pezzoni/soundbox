@@ -24,6 +24,12 @@ db.exec(`
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     username TEXT NOT NULL,
+    guild_ids TEXT NOT NULL DEFAULT '[]',
     expires_at INTEGER NOT NULL
   );
 `);
+
+const sessionColumns = db.prepare("PRAGMA table_info(sessions)").all() as { name: string }[];
+if (!sessionColumns.some((column) => column.name === "guild_ids")) {
+  db.exec("ALTER TABLE sessions ADD COLUMN guild_ids TEXT NOT NULL DEFAULT '[]'");
+}

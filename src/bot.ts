@@ -16,6 +16,10 @@ export const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates],
 });
 
+export function botGuildsAmong(guildIds: string[]): Guild[] {
+  return guildIds.flatMap((id) => client.guilds.cache.get(id) ?? []);
+}
+
 const playCommand = new SlashCommandBuilder()
   .setName("play")
   .setDescription("Joue un fichier audio dans un salon vocal")

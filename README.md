@@ -21,7 +21,6 @@ Dans le [portail développeur](https://discord.com/developers/applications) :
 1. **Bot** : créer le bot et copier son token (`DISCORD_TOKEN`).
 2. **OAuth2** : copier le Client ID (`DISCORD_CLIENT_ID`) et le Client Secret (`DISCORD_CLIENT_SECRET`), puis ajouter dans *Redirects* l'URL `<BASE_URL>/auth/callback` (ex. `http://localhost:3000/auth/callback`).
 3. **Invitation du bot** : scopes `bot` et `applications.commands`, permissions *Se connecter* et *Parler*.
-4. Récupérer l'id du serveur autorisé à se connecter au site (`DISCORD_GUILD_ID`, mode développeur activé dans Discord, clic droit sur le serveur).
 
 ## Configuration
 
@@ -32,13 +31,12 @@ Copier `.env.example` en `.env` et le remplir.
 | `DISCORD_TOKEN` | oui | | Token du bot |
 | `DISCORD_CLIENT_ID` | pour le site | | Application ID (OAuth2) |
 | `DISCORD_CLIENT_SECRET` | pour le site | | Client Secret (OAuth2) |
-| `DISCORD_GUILD_ID` | pour le site | | Serveur dont les membres peuvent se connecter |
 | `BASE_URL` | non | `http://localhost:3000` | URL publique du site, sert à construire l'URL de callback OAuth |
 | `PORT` | non | `3000` | Port HTTP |
 | `DB_PATH` | non | `./data/soundbox.db` | Fichier SQLite |
 | `UPLOADS_DIR` | non | `./data/uploads` | Dossier des fichiers audio |
 
-Sans `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` et `DISCORD_GUILD_ID`, personne ne peut se connecter au site (les routes restent protégées).
+Sans `DISCORD_CLIENT_ID` et `DISCORD_CLIENT_SECRET`, personne ne peut se connecter au site (les routes restent protégées). Peut se connecter tout membre d'au moins un serveur où le bot est installé.
 
 ## Lancer en local
 
@@ -75,7 +73,7 @@ Deux volumes :
 - `/data/db` : le dossier contenant la base SQLite (`soundbox.db`). On monte un dossier et non le fichier seul, car SQLite y crée des fichiers annexes.
 - `/data/uploads` : les fichiers audio.
 
-Les variables non secrètes (`PORT`, `BASE_URL`, `DB_PATH`, `UPLOADS_DIR`) ont des valeurs par défaut dans l'image. Les secrets (`DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_GUILD_ID`) se fournissent à l'exécution. Pensez à renseigner `BASE_URL` avec l'URL publique réelle et à déclarer son `/auth/callback` dans le portail Discord. Le conteneur tourne avec un utilisateur non-root et expose un `HEALTHCHECK` sur `/health`.
+Les variables non secrètes (`PORT`, `BASE_URL`, `DB_PATH`, `UPLOADS_DIR`) ont des valeurs par défaut dans l'image. Les secrets (`DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`) se fournissent à l'exécution. Pensez à renseigner `BASE_URL` avec l'URL publique réelle et à déclarer son `/auth/callback` dans le portail Discord. Le conteneur tourne avec un utilisateur non-root et expose un `HEALTHCHECK` sur `/health`.
 
 ## Routes HTTP
 

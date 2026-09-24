@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { createSession, SESSION_COOKIE, SESSION_TTL_MS } from "../auth/session.js";
+import { client } from "../bot.js";
 import { config } from "../config.js";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
@@ -45,10 +46,10 @@ authRoute.get("/login", (c) => {
 });
 
 authRoute.get("/callback", async (c) => {
-  const { discordClientId, discordClientSecret, allowedGuildId } = config;
-  if (!discordClientId || !discordClientSecret || !allowedGuildId) {
+  const { discordClientId, discordClientSecret } = config;
+  if (!discordClientId || !discordClientSecret) {
     throw new HTTPException(500, {
-      message: "DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and DISCORD_GUILD_ID must be configured",
+      message: "DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET must be configured",
     });
   }
 
@@ -94,11 +95,16 @@ authRoute.get("/callback", async (c) => {
   const user = (await userResponse.json()) as { id: string; username: string; global_name?: string | null };
   const guilds = (await guildsResponse.json()) as { id: string }[];
 
-  if (!guilds.some((guild) => guild.id === allowedGuildId)) {
-    throw new HTTPException(403, { message: "Access is restricted to members of the allowed server" });
+  const sharedGuildIds = guilds.map((guild) => guild.id).filter((id) => client.guilds.cache.has(id));
+  if (sharedGuildIds.length === 0) {
+    throw new HTTPException(403, { message: "Access is restricted to members of a server the bot has joined" });
   }
 
-  const sessionId = createSession({ userId: user.id, username: user.global_name ?? user.username });
+  const sessionId = createSession({
+    userId: user.id,
+    username: user.global_name ?? user.username,
+    guildIds: sharedGuildIds,
+  });
   setCookie(c, SESSION_COOKIE, sessionId, {
     httpOnly: true,
     sameSite: "Lax",
