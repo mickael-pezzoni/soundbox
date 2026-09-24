@@ -36,20 +36,28 @@ export interface Pagination {
   totalPages: number;
 }
 
-export function listFiles(page: number, limit: number): { files: FileRecord[]; pagination: Pagination } {
+export function listFiles(
+  page: number,
+  limit: number,
+  query = "",
+): { files: FileRecord[]; pagination: Pagination } {
   const safePage = Math.max(1, page);
   const safeLimit = Math.min(100, Math.max(1, limit));
   const offset = (safePage - 1) * safeLimit;
 
+  const search = query.trim();
+  const where = search ? "WHERE display_name LIKE ? ESCAPE '\\'" : "";
+  const params = search ? [`%${search.replace(/[\\%_]/g, "\\$&")}%`] : [];
+
   const { count: total } = db
-    .prepare("SELECT COUNT(*) AS count FROM files")
-    .get() as { count: number };
+    .prepare(`SELECT COUNT(*) AS count FROM files ${where}`)
+    .get(...params) as { count: number };
 
   const rows = db
     .prepare(
-      "SELECT id, display_name, filename, created_at FROM files ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      `SELECT id, display_name, filename, created_at FROM files ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
     )
-    .all(safeLimit, offset) as unknown as FileRow[];
+    .all(...params, safeLimit, offset) as unknown as FileRow[];
 
   return {
     files: rows.map((row) => ({
@@ -102,14 +110,6 @@ export function searchFiles(query: string, limit = 25): FileRecord[] {
 }
 
 export const filesRoute = new Hono();
-
-filesRoute.get("/", (c) => {
-  const page = Number(c.req.query("page") ?? 1);
-  const limit = Number(c.req.query("limit") ?? 20);
-  const { files, pagination } = listFiles(page, limit);
-
-  return c.json({ data: files, pagination });
-});
 
 filesRoute.post("/", async (c) => {
   const contentType = c.req.header("content-type") ?? "";

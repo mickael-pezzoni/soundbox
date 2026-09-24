@@ -43,7 +43,35 @@ const FileRow: FC<{ file: FileRecord }> = ({ file }) => (
   </div>
 );
 
-const PaginationBar: FC<{ pagination: Pagination }> = ({ pagination }) => {
+function pageHref(page: number, query: string): string {
+  const params = new URLSearchParams({ page: String(page) });
+  if (query) params.set("q", query);
+  return `/?${params}`;
+}
+
+const SearchBar: FC<{ query: string }> = ({ query }) => (
+  <form method="get" action="/" role="search" class="mb-4 flex gap-2">
+    <input
+      type="search"
+      name="q"
+      value={query}
+      placeholder="Rechercher un son…"
+      aria-label="Rechercher un son"
+      maxlength={200}
+      class="min-w-0 flex-1 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2.5 text-gray-100 focus:border-indigo-500 focus:outline-none"
+    />
+    <button type="submit" class={BTN_SECONDARY}>
+      Rechercher
+    </button>
+    {query ? (
+      <a href="/" class={BTN_SECONDARY}>
+        Effacer
+      </a>
+    ) : null}
+  </form>
+);
+
+const PaginationBar: FC<{ pagination: Pagination; query: string }> = ({ pagination, query }) => {
   const linkClass =
     "rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-gray-100 transition-colors hover:bg-gray-800";
   const disabledClass = "rounded-lg border border-gray-800 px-3 py-1.5 text-gray-600 opacity-50";
@@ -55,7 +83,7 @@ const PaginationBar: FC<{ pagination: Pagination }> = ({ pagination }) => {
       </span>
       <div class="flex items-center gap-3">
         {pagination.page > 1 ? (
-          <a class={linkClass} href={`/?page=${pagination.page - 1}`}>
+          <a class={linkClass} href={pageHref(pagination.page - 1, query)}>
             Précédent
           </a>
         ) : (
@@ -65,7 +93,7 @@ const PaginationBar: FC<{ pagination: Pagination }> = ({ pagination }) => {
           Page {pagination.page} / {pagination.totalPages}
         </span>
         {pagination.page < pagination.totalPages ? (
-          <a class={linkClass} href={`/?page=${pagination.page + 1}`}>
+          <a class={linkClass} href={pageHref(pagination.page + 1, query)}>
             Suivant
           </a>
         ) : (
@@ -381,9 +409,10 @@ const CLIENT_SCRIPT = `
 export const FilesPage: FC<{
   files: FileRecord[];
   pagination: Pagination;
+  query: string;
   guilds: GuildVoiceInfo[];
   defaultChannelId?: string;
-}> = ({ files, pagination, guilds, defaultChannelId }) => (
+}> = ({ files, pagination, query, guilds, defaultChannelId }) => (
   <html lang="fr">
     <head>
       <meta charset="UTF-8" />
@@ -409,6 +438,8 @@ export const FilesPage: FC<{
           </div>
         </header>
 
+        <SearchBar query={query} />
+
         <section
           id="dropzone"
           class="relative flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-xl border border-gray-800 bg-gray-900"
@@ -416,15 +447,21 @@ export const FilesPage: FC<{
           <div class="flex-1 divide-y divide-gray-800">
             {files.length === 0 ? (
               <div class="flex h-full min-h-[50vh] flex-col items-center justify-center gap-1 text-center text-gray-400">
-                <p>Aucun fichier pour le moment.</p>
-                <p class="text-sm text-gray-500">Glissez-déposez un fichier audio ici pour l'ajouter.</p>
+                {query ? (
+                  <p>Aucun son ne correspond à « {query} ».</p>
+                ) : (
+                  <>
+                    <p>Aucun fichier pour le moment.</p>
+                    <p class="text-sm text-gray-500">Glissez-déposez un fichier audio ici pour l'ajouter.</p>
+                  </>
+                )}
               </div>
             ) : (
               files.map((file) => <FileRow file={file} />)
             )}
           </div>
 
-          <PaginationBar pagination={pagination} />
+          <PaginationBar pagination={pagination} query={query} />
 
           <div
             id="drop-overlay"

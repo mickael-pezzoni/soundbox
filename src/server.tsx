@@ -17,7 +17,8 @@ app.use("*", requireAuth);
 
 app.get("/", (c) => {
   const page = Number(c.req.query("page") ?? 1);
-  const { files, pagination } = listFiles(page, 20);
+  const query = c.req.query("q")?.trim() ?? "";
+  const { files, pagination } = listFiles(page, 20, query);
 
   const guilds = listGuildVoiceInfo(client.guilds.cache.values());
   const defaultChannelId = pickDefaultChannelId(
@@ -26,7 +27,13 @@ app.get("/", (c) => {
   );
 
   return c.html(
-    <FilesPage files={files} pagination={pagination} guilds={guilds} defaultChannelId={defaultChannelId} />,
+    <FilesPage
+      files={files}
+      pagination={pagination}
+      query={query}
+      guilds={guilds}
+      defaultChannelId={defaultChannelId}
+    />,
   );
 });
 app.get("/health", (c) => c.json({ status: "healthy" }));

@@ -87,7 +87,6 @@ Toutes les routes exigent une session, sauf `/auth/*`. Une page non authentifié
 | `GET` | `/health` | Statut |
 | `GET` | `/auth/login` | Redirige vers Discord |
 | `GET` | `/auth/callback` | Retour OAuth2, crée la session |
-| `GET` | `/files` | Liste paginée (`?page=&limit=`, max 100) |
 | `POST` | `/files` | Upload en stream (voir ci-dessous) |
 | `PATCH` | `/files/:id` | Renomme, body `{ "displayName": "..." }` |
 | `DELETE` | `/files/:id` | Supprime le fichier et son entrée |
