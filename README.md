@@ -6,6 +6,7 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 
 - Interface web (rendue côté serveur) : liste paginée, upload par glisser-déposer ou par bouton, renommage, suppression, lecture dans un salon vocal choisi
 - Commande Discord `/play fichier:<nom>` avec autocomplétion sur les noms enregistrés, jouée dans le salon vocal où se trouve l'utilisateur
+- Commande Discord `/stop` : arrête le son en cours et déconnecte le bot du salon (réservée aux utilisateurs présents dans ce salon)
 - Salon par défaut : celui où il y a déjà des utilisateurs connectés
 - Connexion via Discord (OAuth2) : seuls les membres d'un serveur précis ont accès, toutes les routes sont protégées
 - Upload en stream (pas de fichier chargé en mémoire), audio uniquement
@@ -52,7 +53,7 @@ npm run build
 npm start
 ```
 
-Le site est sur `http://localhost:3000`. La commande `/play` est enregistrée automatiquement sur chaque serveur où le bot est présent.
+Le site est sur `http://localhost:3000`. Les commandes `/play` et `/stop` sont enregistrées automatiquement sur chaque serveur où le bot est présent.
 
 ## Docker
 
@@ -99,7 +100,7 @@ src/
   index.ts            point d'entrée (base, serveur HTTP, bot)
   config.ts           variables d'environnement
   db.ts               connexion SQLite et tables (files, sessions)
-  bot.ts              client Discord, commande /play
+  bot.ts              client Discord, commandes /play et /stop
   server.tsx          application Hono, page d'accueil
   auth/session.ts     sessions et middleware de protection
   routes/auth.ts      login et callback OAuth2

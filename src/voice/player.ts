@@ -35,12 +35,21 @@ function clearIdleTimer(session: GuildSession) {
   }
 }
 
+/** Stops playback and leaves the channel. Safe to call on a session that was already ended or replaced. */
+function endSession(guildId: string, session: GuildSession) {
+  // Unregister first: stopping the player emits Idle, which must not schedule a disconnect for this session.
+  if (sessions.get(guildId) === session) sessions.delete(guildId);
+  clearIdleTimer(session);
+  session.player.stop(true);
+  if (session.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+    session.connection.destroy();
+  }
+}
+
 function scheduleIdleDisconnect(guildId: string, session: GuildSession) {
   clearIdleTimer(session);
-  session.idleTimer = setTimeout(() => {
-    session.connection.destroy();
-    sessions.delete(guildId);
-  }, IDLE_DISCONNECT_MS);
+  if (sessions.get(guildId) !== session) return;
+  session.idleTimer = setTimeout(() => endSession(guildId, session), IDLE_DISCONNECT_MS);
 }
 
 function getOrCreateSession(
@@ -54,8 +63,7 @@ function getOrCreateSession(
     if (existing.connection.joinConfig.channelId === channelId) {
       return existing;
     }
-    existing.connection.destroy();
-    sessions.delete(guildId);
+    endSession(guildId, existing);
   }
 
   const connection = joinVoiceChannel({
@@ -71,16 +79,27 @@ function getOrCreateSession(
   const session: GuildSession = { connection, player, idleTimer: null };
   sessions.set(guildId, session);
 
-  connection.on(VoiceConnectionStatus.Disconnected, () => {
-    connection.destroy();
-    sessions.delete(guildId);
-  });
+  connection.on(VoiceConnectionStatus.Disconnected, () => endSession(guildId, session));
 
   player.on(AudioPlayerStatus.Idle, () => {
     scheduleIdleDisconnect(guildId, session);
   });
 
   return session;
+}
+
+/** The voice channel the bot is (or is joining) in this guild, if any. */
+export function getActiveChannelId(guildId: string): string | undefined {
+  const session = sessions.get(guildId);
+  return session?.connection.joinConfig.channelId ?? undefined;
+}
+
+/** Stops the current sound and leaves the voice channel. Returns false if the bot wasn't in one. */
+export function stopGuild(guildId: string): boolean {
+  const session = sessions.get(guildId);
+  if (!session) return false;
+  endSession(guildId, session);
+  return true;
 }
 
 export async function playFile(options: PlayOptions): Promise<void> {
