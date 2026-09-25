@@ -2,9 +2,10 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
-import { createSession, SESSION_COOKIE, SESSION_TTL_MS } from "../auth/session.js";
+import { createSession, deleteSession, getSession, SESSION_COOKIE, SESSION_TTL_MS } from "../auth/session.js";
 import { client } from "../bot.js";
 import { config } from "../config.js";
+import { LoginPage } from "../views/login-page.js";
 
 const OAUTH_STATE_COOKIE = "oauth_state";
 const REDIRECT_URI = `${config.baseUrl}/auth/callback`;
@@ -20,6 +21,21 @@ function safeEqual(a: string, b: string): boolean {
 export const authRoute = new Hono();
 
 authRoute.get("/login", (c) => {
+  const sessionId = getCookie(c, SESSION_COOKIE);
+  if (sessionId && getSession(sessionId)) return c.redirect("/");
+
+  return c.html(<LoginPage />);
+});
+
+authRoute.post("/logout", (c) => {
+  const sessionId = getCookie(c, SESSION_COOKIE);
+  if (sessionId) deleteSession(sessionId);
+  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+
+  return c.redirect("/auth/login", 303);
+});
+
+authRoute.get("/discord", (c) => {
   if (!config.discordClientId) {
     throw new HTTPException(500, { message: "DISCORD_CLIENT_ID must be configured" });
   }

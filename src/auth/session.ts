@@ -32,6 +32,10 @@ export function getSession(id: string): SessionUser | undefined {
   return row ? { userId: row.user_id, username: row.username } : undefined;
 }
 
+export function deleteSession(id: string): void {
+  db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+}
+
 export function getCurrentUser(c: Context): SessionUser | undefined {
   const sessionId = getCookie(c, SESSION_COOKIE);
   return sessionId ? getSession(sessionId) : undefined;

@@ -495,6 +495,11 @@ export const FilesPage: FC<{
             <button type="button" id="upload-btn" class={BTN_PRIMARY}>
               + Uploader un fichier
             </button>
+            <form method="post" action="/auth/logout">
+              <button type="submit" class={BTN_SECONDARY}>
+                Déconnexion
+              </button>
+            </form>
           </div>
         </header>
 
