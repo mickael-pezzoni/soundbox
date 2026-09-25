@@ -171,9 +171,10 @@ const SoundPad: FC<{ file: FileRecord }> = ({ file }) => (
   </li>
 );
 
-const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string }> = ({
+const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string; userChannelId?: string }> = ({
   guilds,
   defaultChannelId,
+  userChannelId,
 }) => (
   <div class="flex h-10 min-w-0 flex-1 items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 pl-3 pr-1 sm:max-w-sm">
     <SpeakerIcon class="h-4 w-4 flex-shrink-0 text-zinc-500" />
@@ -183,6 +184,7 @@ const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string }>
       <select
         id="channel-select"
         aria-label="Salon vocal"
+        data-user-channel={userChannelId ?? ""}
         class="h-full min-w-0 flex-1 cursor-pointer truncate bg-transparent px-2 text-sm text-zinc-100 focus:outline-none"
       >
         {guilds.map((guild) => (
@@ -190,6 +192,7 @@ const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string }>
             {guild.channels.map((channel) => (
               <option value={channel.id} selected={channel.id === defaultChannelId} class="bg-zinc-900 text-zinc-100">
                 {formatChannelLabel(channel)}
+                {channel.id === userChannelId ? " · toi" : ""}
               </option>
             ))}
           </optgroup>
@@ -421,6 +424,26 @@ const CLIENT_SCRIPT = `
     btn.addEventListener("click", () => openUploadModal(null));
   });
   el("refresh-channels").addEventListener("click", reload);
+
+  // Hint only: the server is the one refusing to play in a channel the user isn't in.
+  const channelSelect = el("channel-select");
+  const channelWarning = el("channel-warning");
+  function updateChannelWarning() {
+    if (!channelSelect) return;
+    const userChannel = channelSelect.dataset.userChannel;
+    if (!userChannel) {
+      channelWarning.textContent = "Tu n'es connecté à aucun salon vocal. Rejoins-en un sur Discord, puis rafraîchis les salons (↻) pour jouer un son.";
+    } else if (channelSelect.value !== userChannel) {
+      channelWarning.textContent = "Tu n'es pas dans ce salon : tu ne peux jouer un son que dans le salon vocal où tu es connecté.";
+    } else {
+      channelWarning.textContent = "";
+    }
+    channelWarning.classList.toggle("hidden", !channelWarning.textContent);
+  }
+  if (channelSelect) {
+    channelSelect.addEventListener("change", updateChannelWarning);
+    updateChannelWarning();
+  }
   modalChooseBtn.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
     if (fileInput.files[0]) setModalFile(fileInput.files[0]);
@@ -496,7 +519,6 @@ const CLIENT_SCRIPT = `
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {
-        const channelSelect = el("channel-select");
         const channelId = channelSelect && channelSelect.value ? channelSelect.value : undefined;
         const res = await fetch("/files/" + btn.dataset.id + "/play", {
           method: "POST",
@@ -622,8 +644,9 @@ export const FilesPage: FC<{
   query: string;
   guilds: GuildVoiceInfo[];
   defaultChannelId?: string;
+  userChannelId?: string;
   username?: string;
-}> = ({ files, pagination, query, guilds, defaultChannelId, username }) => (
+}> = ({ files, pagination, query, guilds, defaultChannelId, userChannelId, username }) => (
   <html lang="fr" style="color-scheme: dark">
     <head>
       <meta charset="UTF-8" />
@@ -648,7 +671,7 @@ export const FilesPage: FC<{
           </a>
 
           <div class="order-last flex w-full sm:order-none sm:ml-auto sm:w-auto sm:flex-1 sm:justify-end">
-            <ChannelPicker guilds={guilds} defaultChannelId={defaultChannelId} />
+            <ChannelPicker guilds={guilds} defaultChannelId={defaultChannelId} userChannelId={userChannelId} />
           </div>
 
           <div class="ml-auto flex items-center gap-1 sm:ml-0">
@@ -677,6 +700,12 @@ export const FilesPage: FC<{
               : `${pagination.total} son${pagination.total > 1 ? "s" : ""} · clique sur un son pour le jouer`}
           </p>
         </div>
+
+        <p
+          id="channel-warning"
+          role="status"
+          class="mb-5 hidden rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+        ></p>
 
         <div class="mb-6 flex gap-2">
           <SearchBar query={query} />

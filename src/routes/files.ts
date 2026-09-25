@@ -7,10 +7,10 @@ import { pipeline } from "node:stream/promises";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { getCurrentUser } from "../auth/session.js";
-import { client, guildsSharedWith, isGuildMember } from "../bot.js";
+import { client } from "../bot.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
-import { listGuildVoiceInfo, pickDefaultChannelId } from "../voice/channels.js";
+import { findUserVoiceChannel } from "../voice/channels.js";
 import { playFile } from "../voice/player.js";
 
 mkdirSync(config.uploadsDir, { recursive: true });
@@ -205,23 +205,21 @@ filesRoute.post("/:id/play", async (c) => {
     throw new HTTPException(401, { message: "Unauthenticated" });
   }
 
-  const channelId =
-    requestedChannelId ??
-    pickDefaultChannelId(
-      listGuildVoiceInfo(await guildsSharedWith(user.userId)).flatMap((guild) => guild.channels),
-      user.userId,
-    );
+  const channel = requestedChannelId
+    ? client.channels.cache.get(requestedChannelId)
+    : findUserVoiceChannel(client.guilds.cache.values(), user.userId);
 
-  if (!channelId) {
-    throw new HTTPException(503, { message: "No voice channel available (is the bot connected?)" });
+  if (!channel) {
+    throw new HTTPException(requestedChannelId ? 400 : 409, {
+      message: requestedChannelId ? "Salon vocal invalide" : "Rejoins un salon vocal pour jouer un son",
+    });
   }
-
-  const channel = client.channels.cache.get(channelId);
-  if (!channel || !channel.isVoiceBased()) {
-    throw new HTTPException(400, { message: "Invalid voice channel" });
+  if (!channel.isVoiceBased()) {
+    throw new HTTPException(400, { message: "Salon vocal invalide" });
   }
-  if (!(await isGuildMember(channel.guild, user.userId))) {
-    throw new HTTPException(403, { message: "You are not a member of this server" });
+  // Being in the voice channel also proves membership of its guild.
+  if (!channel.members.has(user.userId)) {
+    throw new HTTPException(403, { message: "Tu dois être connecté à ce salon vocal pour y jouer un son" });
   }
 
   try {
@@ -237,5 +235,5 @@ filesRoute.post("/:id/play", async (c) => {
     });
   }
 
-  return c.json({ id, playing: true, channelId });
+  return c.json({ id, playing: true, channelId: channel.id });
 });

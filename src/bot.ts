@@ -9,7 +9,6 @@ import {
 } from "discord.js";
 import { config } from "./config.js";
 import { filePathFor, getFileById, searchFiles } from "./routes/files.js";
-import { formatChannelLabel, listVoiceChannels, pickDefaultChannelId } from "./voice/channels.js";
 import { playFile } from "./voice/player.js";
 
 export const client = new Client({
@@ -32,20 +31,13 @@ export async function guildsSharedWith(userId: string): Promise<Guild[]> {
 
 const playCommand = new SlashCommandBuilder()
   .setName("play")
-  .setDescription("Joue un fichier audio dans un salon vocal")
+  .setDescription("Joue un fichier audio dans ton salon vocal")
   .setContexts(InteractionContextType.Guild)
   .addStringOption((option) =>
     option
       .setName("fichier")
       .setDescription("Nom du fichier enregistré")
       .setRequired(true)
-      .setAutocomplete(true),
-  )
-  .addStringOption((option) =>
-    option
-      .setName("salon")
-      .setDescription("Salon vocal (par défaut : celui où il y a déjà des utilisateurs)")
-      .setRequired(false)
       .setAutocomplete(true),
   );
 
@@ -83,18 +75,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.respond(
         matches.map((file) => ({ name: file.displayName.slice(0, 100), value: file.id })),
       );
-      return;
-    }
-
-    if (focused.name === "salon") {
-      const query = focused.value.toLowerCase();
-      const channels = interaction.inCachedGuild() ? listVoiceChannels(interaction.guild) : [];
-      await interaction.respond(
-        channels
-          .filter((channel) => channel.name.toLowerCase().includes(query))
-          .slice(0, 25)
-          .map((channel) => ({ name: formatChannelLabel(channel).slice(0, 100), value: channel.id })),
-      );
     }
     return;
   }
@@ -121,20 +101,10 @@ async function handlePlayCommand(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const requestedChannelId = interaction.options.getString("salon");
-  const voiceChannelId = requestedChannelId ?? pickDefaultChannelId(listVoiceChannels(interaction.guild), interaction.user.id);
-
-  if (!voiceChannelId) {
-    await interaction.reply({ content: "Aucun salon vocal disponible.", ephemeral: true });
-    return;
-  }
-
-  const channel = interaction.guild.channels.cache.get(voiceChannelId);
-  if (!channel || !channel.isVoiceBased()) {
-    await interaction.reply({
-      content: "Salon vocal invalide. Choisis-en un dans la liste proposée.",
-      ephemeral: true,
-    });
+  // The sound always plays in the caller's own voice channel.
+  const channel = interaction.member.voice.channel;
+  if (!channel) {
+    await interaction.reply({ content: "Rejoins un salon vocal pour jouer un son.", ephemeral: true });
     return;
   }
 

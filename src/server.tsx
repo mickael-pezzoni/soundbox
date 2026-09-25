@@ -22,10 +22,9 @@ app.get("/", async (c) => {
 
   const user = getCurrentUser(c);
   const guilds = listGuildVoiceInfo(user ? await guildsSharedWith(user.userId) : []);
-  const defaultChannelId = pickDefaultChannelId(
-    guilds.flatMap((guild) => guild.channels),
-    user?.userId,
-  );
+  const channels = guilds.flatMap((guild) => guild.channels);
+  const defaultChannelId = pickDefaultChannelId(channels, user?.userId);
+  const userChannelId = user ? channels.find((channel) => channel.memberIds.includes(user.userId))?.id : undefined;
 
   return c.html(
     "<!DOCTYPE html>" +
@@ -35,6 +34,7 @@ app.get("/", async (c) => {
       query={query}
       guilds={guilds}
       defaultChannelId={defaultChannelId}
+      userChannelId={userChannelId}
       username={user?.username}
     />,
   );

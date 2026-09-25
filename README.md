@@ -5,7 +5,7 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 ## Fonctionnalités
 
 - Interface web (rendue côté serveur) : liste paginée, upload par glisser-déposer ou par bouton, renommage, suppression, lecture dans un salon vocal choisi
-- Commande Discord `/play fichier:<nom> [salon:<salon>]` avec autocomplétion sur les noms enregistrés et sur les salons vocaux
+- Commande Discord `/play fichier:<nom>` avec autocomplétion sur les noms enregistrés, jouée dans le salon vocal où se trouve l'utilisateur
 - Salon par défaut : celui où il y a déjà des utilisateurs connectés
 - Connexion via Discord (OAuth2) : seuls les membres d'un serveur précis ont accès, toutes les routes sont protégées
 - Upload en stream (pas de fichier chargé en mémoire), audio uniquement

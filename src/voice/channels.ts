@@ -43,6 +43,15 @@ export function pickDefaultChannelId(channels: VoiceChannelInfo[], userId?: stri
   return populated?.id ?? channels[0]?.id;
 }
 
+/** The voice channel the user is currently connected to, among the given guilds. */
+export function findUserVoiceChannel(guilds: Iterable<Guild>, userId: string): VoiceBasedChannel | undefined {
+  for (const guild of guilds) {
+    const channel = guild.voiceStates.cache.get(userId)?.channel;
+    if (channel) return channel;
+  }
+  return undefined;
+}
+
 export function formatChannelLabel(channel: VoiceChannelInfo): string {
   if (channel.memberCount === 0) return channel.name;
   return `${channel.name} (${channel.memberCount} connecté${channel.memberCount > 1 ? "s" : ""})`;
