@@ -24,7 +24,7 @@ authRoute.get("/login", (c) => {
   const sessionId = getCookie(c, SESSION_COOKIE);
   if (sessionId && getSession(sessionId)) return c.redirect("/");
 
-  return c.html(<LoginPage />);
+  return c.html("<!DOCTYPE html>" + <LoginPage />);
 });
 
 authRoute.post("/logout", (c) => {

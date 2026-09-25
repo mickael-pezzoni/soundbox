@@ -1,7 +1,7 @@
 import type { FC } from "hono/jsx";
 
 export const LoginPage: FC = () => (
-  <html lang="fr">
+  <html lang="fr" style="color-scheme: dark">
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />

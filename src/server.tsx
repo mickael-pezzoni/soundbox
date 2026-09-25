@@ -28,12 +28,14 @@ app.get("/", async (c) => {
   );
 
   return c.html(
+    "<!DOCTYPE html>" +
     <FilesPage
       files={files}
       pagination={pagination}
       query={query}
       guilds={guilds}
       defaultChannelId={defaultChannelId}
+      username={user?.username}
     />,
   );
 });
