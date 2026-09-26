@@ -5,6 +5,7 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 ## Fonctionnalités
 
 - Interface web (rendue côté serveur) : liste paginée, upload par glisser-déposer ou par bouton, renommage, suppression, lecture dans un salon vocal choisi
+- Import depuis YouTube : coller un lien dans la modale « YouTube », la piste audio est téléchargée par `yt-dlp` avec une barre de progression en direct (un seul import à la fois)
 - Commande Discord `/play fichier:<nom>` avec autocomplétion sur les noms enregistrés, jouée dans le salon vocal où se trouve l'utilisateur
 - Commande Discord `/stop` : arrête le son en cours et déconnecte le bot du salon (réservée aux utilisateurs présents dans ce salon)
 - Salon par défaut : celui où il y a déjà des utilisateurs connectés
@@ -13,7 +14,7 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 
 ## Stack
 
-Node.js 24, TypeScript, [discord.js](https://discord.js.org) + `@discordjs/voice`, [Hono](https://hono.dev) (JSX pour le rendu), SQLite via `node:sqlite` (intégré à Node), ffmpeg via `ffmpeg-static`, Tailwind (CDN).
+Node.js 24, TypeScript, [discord.js](https://discord.js.org) + `@discordjs/voice`, [Hono](https://hono.dev) (JSX pour le rendu), SQLite via `node:sqlite` (intégré à Node), ffmpeg via `ffmpeg-static`, Tailwind (CDN), [yt-dlp](https://github.com/yt-dlp/yt-dlp) (binaire externe) pour l'import YouTube.
 
 ## Prérequis côté Discord
 
@@ -36,10 +37,13 @@ Copier `.env.example` en `.env` et le remplir.
 | `PORT` | non | `3000` | Port HTTP |
 | `DB_PATH` | non | `./data/soundbox.db` | Fichier SQLite |
 | `UPLOADS_DIR` | non | `./data/uploads` | Dossier des fichiers audio |
+| `YTDLP_PATH` | non | `yt-dlp` | Chemin du binaire yt-dlp (fourni dans l'image Docker) |
 
 Sans `DISCORD_CLIENT_ID` et `DISCORD_CLIENT_SECRET`, personne ne peut se connecter au site (les routes restent protégées). Peut se connecter tout membre d'au moins un serveur où le bot est installé.
 
 ## Lancer en local
+
+L'import YouTube a besoin du binaire `yt-dlp` sur la machine (`brew install yt-dlp`, ou `YTDLP_PATH` vers un binaire téléchargé à la main). Le reste de l'application fonctionne sans.
 
 ```bash
 npm install
@@ -87,11 +91,14 @@ Toutes les routes exigent une session, sauf `/auth/*`. Une page non authentifié
 | `GET` | `/auth/login` | Redirige vers Discord |
 | `GET` | `/auth/callback` | Retour OAuth2, crée la session |
 | `POST` | `/files` | Upload en stream (voir ci-dessous) |
+| `POST` | `/files/youtube` | Import YouTube, body `{ "url": "..." }`, réponse en flux SSE |
 | `PATCH` | `/files/:id` | Renomme, body `{ "displayName": "..." }` |
 | `DELETE` | `/files/:id` | Supprime le fichier et son entrée |
 | `POST` | `/files/:id/play` | Joue dans un salon, body optionnel `{ "channelId": "..." }` |
 
 Upload : le corps de la requête est le fichier brut, avec les en-têtes `Content-Type: audio/*`, `X-Filename` (nom d'origine, encodé avec `encodeURIComponent`) et `X-Display-Name` (optionnel, sinon le nom du fichier). Un autre type de contenu renvoie `415`.
+
+Import YouTube : une URL hors YouTube renvoie `400`, un import déjà en cours `409`. Sinon la réponse est un flux `text/event-stream` dont chaque événement est un objet JSON — `{"phase":"info","title","duration"}`, puis des `{"phase":"progress","percent","speed","eta"}`, et enfin `{"phase":"done","id","displayName"}` ou `{"phase":"error","message"}`. Un flux qui se termine sans `done` signifie que le téléchargement a échoué. Fermer la connexion annule l'import et supprime les fichiers partiels. La route est en `POST` (et non en `GET` consommable par `EventSource`) parce qu'elle télécharge et écrit en base : un `GET` serait la seule forme de requête cross-site à laquelle le cookie de session, en `SameSite=Lax`, reste exposé.
 
 ## Structure
 
@@ -103,6 +110,7 @@ src/
   bot.ts              client Discord, commandes /play et /stop
   server.tsx          application Hono, page d'accueil
   auth/session.ts     sessions et middleware de protection
+  media/youtube.ts    téléchargement audio via yt-dlp (progression, annulation, nettoyage)
   routes/auth.ts      login et callback OAuth2
   routes/files.ts     API des fichiers
   voice/channels.ts   liste des salons vocaux et salon par défaut
@@ -115,3 +123,5 @@ src/
 - Les sessions sont stockées dans SQLite (7 jours) et survivent aux redémarrages.
 - Tailwind est chargé via son CDN : pratique pour une interface interne, à remplacer par un build statique pour un usage public à fort trafic.
 - Le bot se déconnecte du salon vocal après 5 minutes d'inactivité.
+- L'import YouTube n'est pas fiable à 100 %, et ce n'est pas corrigeable côté application : YouTube répond souvent « Sign in to confirm you're not a bot » aux adresses IP d'hébergeurs, et les extracteurs d'une version figée de yt-dlp se périment en quelques semaines. Le message d'erreur remonté dans l'interface est celui de yt-dlp. Pour mettre à jour sans reconstruire l'image, monter un binaire récent et pointer `YTDLP_PATH` dessus ; sinon reconstruire avec `--build-arg YTDLP_VERSION=<release>`.
+- L'audio est récupéré sans réencodage (`.m4a` ou `.webm`/opus selon la vidéo) : c'est ffmpeg qui convertit à la lecture, comme pour les fichiers uploadés. Limites en dur dans `src/media/youtube.ts` : 15 minutes, 50 Mo, 3 minutes de timeout, un import à la fois.

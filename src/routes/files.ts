@@ -6,10 +6,17 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { streamSSE } from "hono/streaming";
 import { getCurrentUser } from "../auth/session.js";
 import { client } from "../bot.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
+import {
+  downloadAudio,
+  parseYoutubeUrl,
+  releaseDownloadSlot,
+  tryAcquireDownloadSlot,
+} from "../media/youtube.js";
 import { findUserVoiceChannel } from "../voice/channels.js";
 import { playFile } from "../voice/player.js";
 
@@ -154,6 +161,59 @@ filesRoute.post("/", async (c) => {
   ).run(id, displayName, originalFilename);
 
   return c.json({ id, displayName, filename: originalFilename }, 201);
+});
+
+filesRoute.post("/youtube", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const url = parseYoutubeUrl(typeof body?.url === "string" ? body.url : "");
+
+  // Anything that still needs a status code has to be settled before the stream starts: once the
+  // first byte is out, the headers are gone and an HTTPException can no longer be turned into a 4xx.
+  if (!url) {
+    throw new HTTPException(400, { message: "Colle un lien YouTube valide" });
+  }
+  if (!tryAcquireDownloadSlot()) {
+    throw new HTTPException(409, { message: "Un téléchargement est déjà en cours, réessaie dans un instant" });
+  }
+
+  c.header("X-Accel-Buffering", "no"); // nginx buffers proxied responses even when they are chunked
+
+  const id = randomUUID();
+  const controller = new AbortController();
+
+  return streamSSE(c, async (stream) => {
+    stream.onAbort(() => controller.abort());
+
+    try {
+      const { title, filename } = await downloadAudio({
+        url,
+        id,
+        signal: controller.signal,
+        onInfo: (info) => {
+          void stream.writeSSE({ data: JSON.stringify({ phase: "info", ...info }) });
+        },
+        onProgress: (progress) => {
+          void stream.writeSSE({ data: JSON.stringify({ phase: "progress", ...progress }) });
+        },
+      });
+
+      const displayName = (title.trim() || filename).slice(0, 200);
+      db.prepare("INSERT INTO files (id, display_name, filename) VALUES (?, ?, ?)").run(id, displayName, filename);
+
+      await stream.writeSSE({ data: JSON.stringify({ phase: "done", id, displayName }) });
+    } catch (error) {
+      // A callback that throws is only console.error'd by Hono, which then closes the stream
+      // cleanly — the client would read that as a success. The failure has to be sent explicitly.
+      await stream.writeSSE({
+        data: JSON.stringify({
+          phase: "error",
+          message: error instanceof Error ? error.message : "Le téléchargement a échoué",
+        }),
+      });
+    } finally {
+      releaseDownloadSlot();
+    }
+  });
 });
 
 filesRoute.patch("/:id", async (c) => {

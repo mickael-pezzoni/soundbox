@@ -15,5 +15,6 @@ export const config = {
   uploadsDir: process.env.UPLOADS_DIR ?? "./data/uploads",
   discordClientId: process.env.DISCORD_CLIENT_ID,
   discordClientSecret: process.env.DISCORD_CLIENT_SECRET,
+  ytdlpPath: process.env.YTDLP_PATH ?? "yt-dlp",
   baseUrl: (process.env.BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}`).replace(/\/$/, ""),
 };

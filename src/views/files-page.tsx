@@ -95,6 +95,16 @@ const PlusIcon: FC = () => (
   </svg>
 );
 
+const YoutubeIcon: FC = () => (
+  <svg class={ICON} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path
+      fill-rule="evenodd"
+      d="M17.3 5.6a2 2 0 0 0-1.4-1.4C14.6 3.9 10 3.9 10 3.9s-4.6 0-5.9.3a2 2 0 0 0-1.4 1.4C2.4 6.9 2.4 10 2.4 10s0 3.1.3 4.4a2 2 0 0 0 1.4 1.4c1.3.3 5.9.3 5.9.3s4.6 0 5.9-.3a2 2 0 0 0 1.4-1.4c.3-1.3.3-4.4.3-4.4s0-3.1-.3-4.4ZM8.4 12.7V7.3L13 10l-4.6 2.7Z"
+      clip-rule="evenodd"
+    />
+  </svg>
+);
+
 const LogoutIcon: FC = () => (
   <svg class={ICON} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
     <path
@@ -311,7 +321,14 @@ const Modal: FC<{ id: string; labelledBy: string; children?: Child }> = ({ id, l
 
 const CLIENT_SCRIPT = `
 (() => {
-  const state = { mode: "upload", pendingUpload: null, editingId: null, deletingId: null, nameTouched: false };
+  const state = {
+    mode: "upload",
+    pendingUpload: null,
+    editingId: null,
+    deletingId: null,
+    nameTouched: false,
+    ytController: null,
+  };
 
   const el = (id) => document.getElementById(id);
   const dropzone = el("dropzone");
@@ -333,6 +350,15 @@ const CLIENT_SCRIPT = `
   const deleteModalText = el("delete-modal-text");
   const deleteConfirm = el("delete-confirm");
   const deleteCancel = el("delete-cancel");
+
+  const ytModal = el("yt-modal");
+  const ytUrl = el("yt-url");
+  const ytProgress = el("yt-progress");
+  const ytProgressBar = el("yt-progress-bar");
+  const ytStatus = el("yt-status");
+  const ytError = el("yt-error");
+  const ytConfirm = el("yt-confirm");
+  const ytCancel = el("yt-cancel");
 
   const toast = el("toast");
   let toastTimer = null;
@@ -420,8 +446,29 @@ const CLIENT_SCRIPT = `
     state.deletingId = null;
   }
 
+  function openYtModal() {
+    ytUrl.value = "";
+    ytError.textContent = "";
+    ytStatus.textContent = "";
+    ytProgressBar.style.width = "0%";
+    ytProgress.classList.add("hidden");
+    ytConfirm.disabled = false;
+    show(ytModal);
+    ytUrl.focus();
+  }
+
+  function closeYtModal() {
+    // Closing is also how a running import is cancelled: the server kills yt-dlp on disconnect.
+    if (state.ytController) state.ytController.abort();
+    state.ytController = null;
+    hide(ytModal);
+  }
+
   document.querySelectorAll('[data-action="upload"]').forEach((btn) => {
     btn.addEventListener("click", () => openUploadModal(null));
+  });
+  document.querySelectorAll('[data-action="youtube"]').forEach((btn) => {
+    btn.addEventListener("click", openYtModal);
   });
   el("refresh-channels").addEventListener("click", reload);
 
@@ -456,22 +503,31 @@ const CLIENT_SCRIPT = `
     if (e.key === "Enter") nameConfirm.click();
   });
 
+  // Each modal knows how to close itself: a chain of if/else would silently close the wrong one.
+  const modalClosers = new Map([
+    [nameModal, closeNameModal],
+    [ytModal, closeYtModal],
+    [deleteModal, closeDeleteModal],
+  ]);
+  const anyModalOpen = () => [...modalClosers.keys()].some(isOpen);
+
   document.querySelectorAll("[data-modal]").forEach((modal) => {
     modal.addEventListener("click", (e) => {
       if (e.target !== modal) return;
-      if (modal === nameModal) closeNameModal();
-      else closeDeleteModal();
+      const close = modalClosers.get(modal);
+      if (close) close();
     });
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (isOpen(nameModal)) closeNameModal();
-      if (isOpen(deleteModal)) closeDeleteModal();
+      modalClosers.forEach((close, modal) => {
+        if (isOpen(modal)) close();
+      });
       return;
     }
     const typing = e.target instanceof HTMLElement && e.target.matches("input, textarea, select");
-    if (e.key === "/" && !typing && !isOpen(nameModal) && !isOpen(deleteModal)) {
+    if (e.key === "/" && !typing && !anyModalOpen()) {
       e.preventDefault();
       searchInput.focus();
       searchInput.select();
@@ -615,6 +671,95 @@ const CLIENT_SCRIPT = `
     }
   }
 
+  ytCancel.addEventListener("click", closeYtModal);
+  ytUrl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") ytConfirm.click();
+  });
+
+  function applyYtEvent(event) {
+    if (event.phase === "info") {
+      ytStatus.textContent = event.title ? "Téléchargement de « " + event.title + " »…" : "Téléchargement…";
+    } else if (event.phase === "progress") {
+      ytProgressBar.style.width = Math.min(100, Math.max(0, event.percent)) + "%";
+      const details = [Math.round(event.percent) + "%"];
+      if (event.speed && event.speed.indexOf("Unknown") === -1) details.push(event.speed);
+      if (event.eta && event.eta.indexOf("Unknown") === -1 && event.eta !== "N/A") details.push("reste " + event.eta);
+      ytStatus.textContent = details.join(" · ");
+    }
+  }
+
+  ytConfirm.addEventListener("click", async () => {
+    const url = ytUrl.value.trim();
+    if (!url) {
+      ytError.textContent = "Colle le lien d'une vidéo YouTube.";
+      return;
+    }
+
+    const controller = new AbortController();
+    state.ytController = controller;
+    ytConfirm.disabled = true;
+    ytError.textContent = "";
+    ytStatus.textContent = "Récupération de la vidéo…";
+    ytProgressBar.style.width = "0%";
+    ytProgress.classList.remove("hidden");
+
+    try {
+      const res = await fetch("/files/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+        signal: controller.signal,
+      });
+      // A refusal answers with JSON, not with a stream: check before reading the body as events.
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Échec de l'import");
+      }
+      if (!res.body) throw new Error("Réponse inattendue du serveur");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finished = false;
+
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+
+        const blocks = buffer.split("\\n\\n");
+        buffer = blocks.pop();
+        for (const block of blocks) {
+          const line = block.split("\\n").find((candidate) => candidate.indexOf("data:") === 0);
+          if (!line) continue;
+          const event = JSON.parse(line.slice(5).trim());
+          if (event.phase === "error") throw new Error(event.message);
+          if (event.phase === "done") {
+            finished = true;
+            showToast("« " + event.displayName + " » importé");
+          } else {
+            applyYtEvent(event);
+          }
+        }
+      }
+
+      // A stream that ends without "done" means the download never completed.
+      if (!finished) throw new Error("Connexion interrompue pendant le téléchargement.");
+
+      state.ytController = null;
+      hide(ytModal);
+      reload();
+    } catch (err) {
+      if (err.name === "AbortError") return; // cancelled from closeYtModal, which closed the modal
+      ytError.textContent = err.message || "Une erreur est survenue";
+      ytStatus.textContent = "";
+      ytProgress.classList.add("hidden");
+    } finally {
+      ytConfirm.disabled = false;
+      if (state.ytController === controller) state.ytController = null;
+    }
+  });
+
   deleteCancel.addEventListener("click", closeDeleteModal);
 
   deleteConfirm.addEventListener("click", async () => {
@@ -719,6 +864,16 @@ export const FilesPage: FC<{
             <PlusIcon />
             <span class="hidden sm:inline">Ajouter un son</span>
           </button>
+          <button
+            type="button"
+            data-action="youtube"
+            class={`${BTN_CORE} ${VARIANT_SECONDARY} h-10 w-10 rounded-lg sm:w-auto sm:px-4`}
+            title="Importer depuis YouTube"
+            aria-label="Importer depuis YouTube"
+          >
+            <YoutubeIcon />
+            <span class="hidden sm:inline">YouTube</span>
+          </button>
         </div>
 
         <section id="dropzone" class="relative flex flex-1 flex-col">
@@ -774,6 +929,42 @@ export const FilesPage: FC<{
           </button>
           <button type="button" class={BTN_PRIMARY} id="name-confirm">
             Valider
+          </button>
+        </div>
+      </Modal>
+
+      <Modal id="yt-modal" labelledBy="yt-modal-title">
+        <h2 id="yt-modal-title" class="mb-5 text-lg font-semibold">
+          Importer depuis YouTube
+        </h2>
+
+        <label for="yt-url" class="mb-1.5 block text-sm text-zinc-400">
+          Lien de la vidéo
+        </label>
+        <input
+          type="url"
+          id="yt-url"
+          placeholder="https://www.youtube.com/watch?v=…"
+          maxlength={500}
+          class={`${FIELD} h-10 w-full px-3`}
+        />
+
+        <div id="yt-progress" class="mt-4 hidden">
+          <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+            <div id="yt-progress-bar" class="h-full w-0 rounded-full bg-indigo-500 transition-[width] duration-200"></div>
+          </div>
+          <p id="yt-status" class="mt-2 truncate text-sm text-zinc-400"></p>
+        </div>
+
+        <div id="yt-error" class="mt-2 min-h-[1.25rem] text-sm text-red-400" role="alert"></div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" class={BTN_SECONDARY} id="yt-cancel">
+            Annuler
+          </button>
+          <button type="button" class={BTN_PRIMARY} id="yt-confirm">
+            <YoutubeIcon />
+            Importer
           </button>
         </div>
       </Modal>
