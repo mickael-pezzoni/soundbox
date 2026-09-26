@@ -385,6 +385,7 @@ const CLIENT_SCRIPT = `
   const trimToggle = el("trim-toggle");
   const trimToggleRow = el("trim-toggle-row");
   const trimPanel = el("trim-panel");
+  const trimWarning = el("trim-warning");
   const trimWaveform = el("trim-waveform");
   const trimPlay = el("trim-play");
   const trimPlayLabel = el("trim-play-label");
@@ -564,6 +565,7 @@ const CLIENT_SCRIPT = `
     nameFileRow.classList.remove("hidden");
     trimRow.classList.add("hidden");
     trimToggleRow.classList.remove("hidden");
+    trimWarning.classList.add("hidden");
     setTrimEnabled(false);
     nameFileLabel.textContent = "Aucun fichier sélectionné";
     nameFileLabel.classList.remove("text-zinc-100");
@@ -599,6 +601,7 @@ const CLIENT_SCRIPT = `
     trimRow.classList.remove("hidden");
     // The waveform is the whole point here: no opt-in checkbox.
     trimToggleRow.classList.add("hidden");
+    trimWarning.classList.remove("hidden");
     nameInput.value = name;
     nameModalError.textContent = "";
     show(nameModal);
@@ -1128,6 +1131,9 @@ export const FilesPage: FC<{
               Recouper le son
             </label>
           </div>
+          <p id="trim-warning" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            Le son d'origine sera remplacé par le passage sélectionné.
+          </p>
           <div id="trim-panel" class="mt-3 hidden">
             <div id="trim-waveform" class="min-h-[80px] rounded-lg bg-zinc-950 px-2"></div>
             <div class="mt-2 flex items-center gap-3">
