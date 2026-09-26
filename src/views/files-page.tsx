@@ -349,6 +349,8 @@ const CLIENT_SCRIPT = `
     ytController: null,
     trim: null,
     trimToken: null,
+    // Set when the cut modal opens on a freshly imported sound the page doesn't list yet.
+    reloadOnClose: false,
   };
 
   const el = (id) => document.getElementById(id);
@@ -379,12 +381,14 @@ const CLIENT_SCRIPT = `
   const ytStatus = el("yt-status");
   const ytError = el("yt-error");
   const ytConfirm = el("yt-confirm");
+  const ytTrim = el("yt-trim");
   const ytCancel = el("yt-cancel");
 
   const trimRow = el("trim-row");
   const trimToggle = el("trim-toggle");
   const trimToggleRow = el("trim-toggle-row");
   const trimPanel = el("trim-panel");
+  const trimWarning = el("trim-warning");
   const trimWaveform = el("trim-waveform");
   const trimPlay = el("trim-play");
   const trimPlayLabel = el("trim-play-label");
@@ -564,6 +568,7 @@ const CLIENT_SCRIPT = `
     nameFileRow.classList.remove("hidden");
     trimRow.classList.add("hidden");
     trimToggleRow.classList.remove("hidden");
+    trimWarning.classList.add("hidden");
     setTrimEnabled(false);
     nameFileLabel.textContent = "Aucun fichier sélectionné";
     nameFileLabel.classList.remove("text-zinc-100");
@@ -599,6 +604,7 @@ const CLIENT_SCRIPT = `
     trimRow.classList.remove("hidden");
     // The waveform is the whole point here: no opt-in checkbox.
     trimToggleRow.classList.add("hidden");
+    trimWarning.classList.remove("hidden");
     nameInput.value = name;
     nameModalError.textContent = "";
     show(nameModal);
@@ -609,6 +615,10 @@ const CLIENT_SCRIPT = `
 
   function closeNameModal() {
     hide(nameModal);
+    if (state.reloadOnClose) {
+      state.reloadOnClose = false;
+      reload();
+    }
     setTrimEnabled(false);
     state.pendingUpload = null;
     state.editingId = null;
@@ -621,6 +631,7 @@ const CLIENT_SCRIPT = `
 
   function openYtModal() {
     ytUrl.value = "";
+    ytTrim.checked = false;
     ytError.textContent = "";
     ytStatus.textContent = "";
     ytProgressBar.style.width = "0%";
@@ -825,6 +836,7 @@ const CLIENT_SCRIPT = `
       } else {
         await renameFile(state.editingId, displayName);
       }
+      state.reloadOnClose = false;
       closeNameModal();
       reload();
     } catch (err) {
@@ -924,7 +936,7 @@ const CLIENT_SCRIPT = `
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let finished = false;
+      let imported = null;
 
       while (true) {
         const chunk = await reader.read();
@@ -939,7 +951,7 @@ const CLIENT_SCRIPT = `
           const event = JSON.parse(line.slice(5).trim());
           if (event.phase === "error") throw new Error(event.message);
           if (event.phase === "done") {
-            finished = true;
+            imported = event;
             showToast("« " + event.displayName + " » importé");
           } else {
             applyYtEvent(event);
@@ -948,11 +960,16 @@ const CLIENT_SCRIPT = `
       }
 
       // A stream that ends without "done" means the download never completed.
-      if (!finished) throw new Error("Connexion interrompue pendant le téléchargement.");
+      if (!imported) throw new Error("Connexion interrompue pendant le téléchargement.");
 
       state.ytController = null;
       hide(ytModal);
-      reload();
+      if (ytTrim.checked) {
+        openTrimModal(imported.id, imported.displayName);
+        state.reloadOnClose = true;
+      } else {
+        reload();
+      }
     } catch (err) {
       if (err.name === "AbortError") return; // cancelled from closeYtModal, which closed the modal
       ytError.textContent = err.message || "Une erreur est survenue";
@@ -1128,6 +1145,9 @@ export const FilesPage: FC<{
               Recouper le son
             </label>
           </div>
+          <p id="trim-warning" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            Le son d'origine sera remplacé par le passage sélectionné.
+          </p>
           <div id="trim-panel" class="mt-3 hidden">
             <div id="trim-waveform" class="min-h-[80px] rounded-lg bg-zinc-950 px-2"></div>
             <div class="mt-2 flex items-center gap-3">
@@ -1179,6 +1199,11 @@ export const FilesPage: FC<{
           </div>
           <p id="yt-status" class="mt-2 truncate text-sm text-zinc-400"></p>
         </div>
+
+        <label class="mt-4 flex w-fit cursor-pointer items-center gap-2 text-sm text-zinc-300">
+          <input type="checkbox" id="yt-trim" class="h-4 w-4 accent-indigo-500" />
+          Couper le son après l'import
+        </label>
 
         <div id="yt-error" class="mt-2 min-h-[1.25rem] text-sm text-red-400" role="alert"></div>
 

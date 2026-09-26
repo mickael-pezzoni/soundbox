@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, mkdirSync } from "node:fs";
-import { rm, stat } from "node:fs/promises";
+import { rename, rm, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -332,15 +332,26 @@ filesRoute.post("/:id/trim", async (c) => {
   const range = parseTrimRange(body?.start, body?.end);
 
   const requestedName = typeof body?.displayName === "string" ? body.displayName.trim() : "";
-  const displayName = (requestedName || `${source.displayName} (extrait)`).slice(0, 200);
+  const displayName = (requestedName || source.displayName).slice(0, 200);
   const filename = `${basename(source.filename, extname(source.filename))}.mp3`;
-  const id = randomUUID();
+  const sourcePath = filePathFor(source.id, source.filename);
+  const destination = filePathFor(source.id, filename);
+  // ffmpeg can't write over its own input (an MP3 source keeps the same path), so the cut goes to a
+  // temporary file first; the rename then swaps it in atomically.
+  const temporary = join(config.uploadsDir, `${source.id}.trim-${randomUUID()}.mp3`);
 
-  await trimOrThrow(filePathFor(source.id, source.filename), filePathFor(id, filename), range);
+  await trimOrThrow(sourcePath, temporary, range);
+  try {
+    await rename(temporary, destination);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
 
-  db.prepare("INSERT INTO files (id, display_name, filename) VALUES (?, ?, ?)").run(id, displayName, filename);
+  db.prepare("UPDATE files SET display_name = ?, filename = ? WHERE id = ?").run(displayName, filename, source.id);
+  if (sourcePath !== destination) await rm(sourcePath, { force: true });
 
-  return c.json({ id, displayName, filename }, 201);
+  return c.json({ id: source.id, displayName, filename });
 });
 
 filesRoute.post("/:id/play", async (c) => {
