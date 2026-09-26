@@ -5,7 +5,7 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 ## Fonctionnalités
 
 - Interface web (rendue côté serveur) : liste paginée, upload par glisser-déposer ou par bouton, renommage, suppression, lecture dans un salon vocal choisi
-- Import depuis YouTube : coller un lien dans la modale « YouTube », la piste audio est téléchargée par `yt-dlp` avec une barre de progression en direct (un seul import à la fois)
+- Import depuis YouTube : coller un lien dans la modale « YouTube », la piste audio est téléchargée par `yt-dlp` avec une barre de progression en direct (un seul import à la fois). La case « Couper le son après l'import » ouvre directement la découpe sur le son importé
 - Commande Discord `/play fichier:<nom>` avec autocomplétion sur les noms enregistrés, jouée dans le salon vocal où se trouve l'utilisateur
 - Commande Discord `/stop` : arrête le son en cours et déconnecte le bot du salon (réservée aux utilisateurs présents dans ce salon)
 - Salon par défaut : celui où il y a déjà des utilisateurs connectés
