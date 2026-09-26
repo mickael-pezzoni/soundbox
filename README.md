@@ -7,7 +7,9 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 - Interface web (rendue côté serveur) : liste paginée, upload par glisser-déposer ou par bouton, renommage, suppression, lecture dans un salon vocal choisi
 - Import depuis YouTube : coller un lien dans la modale « YouTube », la piste audio est téléchargée par `yt-dlp` avec une barre de progression en direct (un seul import à la fois). La case « Couper le son après l'import » ouvre directement la découpe sur le son importé
 - Commande Discord `/play fichier:<nom>` avec autocomplétion sur les noms enregistrés, jouée dans le salon vocal où se trouve l'utilisateur
-- Commande Discord `/stop` : arrête le son en cours et déconnecte le bot du salon (réservée aux utilisateurs présents dans ce salon)
+- Commande Discord `/stop` (et bouton « Stop » du site) : arrête le son en cours, le bot reste dans le salon
+- Commande Discord `/disconnect` : arrête le son et déconnecte le bot du salon
+- `/stop` et `/disconnect` sont réservées aux utilisateurs présents dans le salon du bot
 - Salon par défaut : celui où il y a déjà des utilisateurs connectés
 - Connexion via Discord (OAuth2) : seuls les membres d'un serveur précis ont accès, toutes les routes sont protégées
 - Upload en stream (pas de fichier chargé en mémoire), audio uniquement
@@ -58,7 +60,7 @@ npm run build
 npm start
 ```
 
-Le site est sur `http://localhost:3000`. Les commandes `/play` et `/stop` sont enregistrées automatiquement sur chaque serveur où le bot est présent.
+Le site est sur `http://localhost:3000`. Les commandes `/play`, `/stop` et `/disconnect` sont enregistrées automatiquement sur chaque serveur où le bot est présent.
 
 ## Docker
 
