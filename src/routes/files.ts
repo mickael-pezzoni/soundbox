@@ -120,10 +120,10 @@ export function searchFiles(query: string, limit = 25): FileRecord[] {
 /** Validates a cut requested in seconds; throws a 400 describing what is wrong. */
 function parseTrimRange(start: unknown, end: unknown): { start: number; end: number } {
   if (typeof start !== "number" || typeof end !== "number" || !Number.isFinite(start) || !Number.isFinite(end)) {
-    throw new HTTPException(400, { message: "start et end sont requis (en secondes)" });
+    throw new HTTPException(400, { message: "start and end are required (in seconds)" });
   }
   if (start < 0 || end <= start) {
-    throw new HTTPException(400, { message: "Il faut 0 ≤ start < end" });
+    throw new HTTPException(400, { message: "Expected 0 ≤ start < end" });
   }
   return { start, end };
 }
@@ -133,7 +133,7 @@ async function trimOrThrow(inputPath: string, outputPath: string, range: { start
     await trimToMp3({ inputPath, outputPath, ...range });
   } catch (error) {
     throw new HTTPException(error instanceof TrimRangeError ? 400 : 500, {
-      message: error instanceof Error ? error.message : "Le découpage a échoué",
+      message: error instanceof Error ? error.message : "Trimming failed",
     });
   }
 }
@@ -170,7 +170,7 @@ filesRoute.post("/", async (c) => {
   const trimStart = c.req.header("x-trim-start");
   const trimEnd = c.req.header("x-trim-end");
   if ((trimStart === undefined) !== (trimEnd === undefined)) {
-    throw new HTTPException(400, { message: "X-Trim-Start et X-Trim-End vont ensemble" });
+    throw new HTTPException(400, { message: "X-Trim-Start and X-Trim-End must be sent together" });
   }
   // Number("") is 0: a blank header has to fail validation rather than mean "from the start".
   const toSeconds = (value: string) => (value.trim() ? Number(value) : Number.NaN);
@@ -211,10 +211,10 @@ filesRoute.post("/youtube", async (c) => {
   // Anything that still needs a status code has to be settled before the stream starts: once the
   // first byte is out, the headers are gone and an HTTPException can no longer be turned into a 4xx.
   if (!url) {
-    throw new HTTPException(400, { message: "Colle un lien YouTube valide" });
+    throw new HTTPException(400, { message: "Invalid YouTube link" });
   }
   if (!tryAcquireDownloadSlot()) {
-    throw new HTTPException(409, { message: "Un téléchargement est déjà en cours, réessaie dans un instant" });
+    throw new HTTPException(409, { message: "A download is already in progress, try again shortly" });
   }
 
   c.header("X-Accel-Buffering", "no"); // nginx buffers proxied responses even when they are chunked
@@ -248,7 +248,7 @@ filesRoute.post("/youtube", async (c) => {
       await stream.writeSSE({
         data: JSON.stringify({
           phase: "error",
-          message: error instanceof Error ? error.message : "Le téléchargement a échoué",
+          message: error instanceof Error ? error.message : "Download failed",
         }),
       });
     } finally {
@@ -369,22 +369,22 @@ filesRoute.post("/stop", async (c) => {
     : findUserVoiceChannel(client.guilds.cache.values(), user.userId);
   if (!selected || !selected.isVoiceBased()) {
     throw new HTTPException(requestedChannelId ? 400 : 409, {
-      message: requestedChannelId ? "Salon vocal invalide" : "Rejoins un salon vocal pour arrêter le son",
+      message: requestedChannelId ? "Invalid voice channel" : "Join a voice channel to stop the sound",
     });
   }
 
   const guild = selected.guild;
   const botChannelId = getActiveChannelId(guild.id);
   if (!botChannelId) {
-    throw new HTTPException(409, { message: "Aucun son en cours de lecture" });
+    throw new HTTPException(409, { message: "No sound is playing" });
   }
   // Same rule as /stop: you can only act on the channel you are in.
   if (guild.voiceStates.cache.get(user.userId)?.channelId !== botChannelId) {
-    throw new HTTPException(403, { message: "Tu dois être connecté au salon vocal du bot pour arrêter le son" });
+    throw new HTTPException(403, { message: "You must be in the bot's voice channel to stop the sound" });
   }
 
   if (!stopPlayback(guild.id)) {
-    throw new HTTPException(409, { message: "Aucun son en cours de lecture" });
+    throw new HTTPException(409, { message: "No sound is playing" });
   }
 
   return c.json({ stopped: true, channelId: botChannelId });
@@ -411,15 +411,15 @@ filesRoute.post("/:id/play", async (c) => {
 
   if (!channel) {
     throw new HTTPException(requestedChannelId ? 400 : 409, {
-      message: requestedChannelId ? "Salon vocal invalide" : "Rejoins un salon vocal pour jouer un son",
+      message: requestedChannelId ? "Invalid voice channel" : "Join a voice channel to play a sound",
     });
   }
   if (!channel.isVoiceBased()) {
-    throw new HTTPException(400, { message: "Salon vocal invalide" });
+    throw new HTTPException(400, { message: "Invalid voice channel" });
   }
   // Being in the voice channel also proves membership of its guild.
   if (!channel.members.has(user.userId)) {
-    throw new HTTPException(403, { message: "Tu dois être connecté à ce salon vocal pour y jouer un son" });
+    throw new HTTPException(403, { message: "You must be in this voice channel to play a sound in it" });
   }
 
   try {

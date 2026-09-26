@@ -27,7 +27,7 @@ export class TrimRangeError extends Error {}
  */
 export async function trimToMp3(options: TrimOptions): Promise<void> {
   if (!ffmpegPath) {
-    throw new Error("ffmpeg est introuvable pour cette plateforme.");
+    throw new Error("ffmpeg is not available for this platform.");
   }
 
   const args = [
@@ -83,12 +83,12 @@ export async function trimToMp3(options: TrimOptions): Promise<void> {
 
   const stderr = stderrLines.join("\n");
   const failure = timedOut
-    ? new Error("Le découpage a pris trop de temps.")
+    ? new Error("Trimming took too long.")
     : exitCode !== 0
-      ? new Error(stderrLines.at(-1) ?? "Le découpage a échoué.")
+      ? new Error(stderrLines.at(-1) ?? "Trimming failed.")
       : // ffmpeg exits 0 when seeking past the end: it just writes nothing.
         /Output file is empty/i.test(stderr)
-        ? new TrimRangeError("Le début est après la fin du fichier.")
+        ? new TrimRangeError("Start is past the end of the file.")
         : undefined;
 
   if (failure) {

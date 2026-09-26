@@ -96,14 +96,14 @@ function describeFailure(stderr: string[]): string {
   const joined = stderr.join("\n");
 
   if (joined.includes("does not pass filter")) {
-    return `Vidéo trop longue (maximum ${MAX_DURATION_S / 60} minutes).`;
+    return `Video too long (maximum ${MAX_DURATION_S / 60} minutes).`;
   }
   if (/max-filesize|larger than/i.test(joined)) {
-    return "Fichier audio trop volumineux.";
+    return "Audio file too large.";
   }
 
   const reported = [...stderr].reverse().find((line) => line.startsWith("ERROR:"));
-  return reported ? reported.replace(/^ERROR:\s*/, "") : "Le téléchargement a échoué.";
+  return reported ? reported.replace(/^ERROR:\s*/, "") : "Download failed.";
 }
 
 export async function downloadAudio(options: DownloadOptions): Promise<DownloadResult> {
@@ -217,7 +217,7 @@ export async function downloadAudio(options: DownloadOptions): Promise<DownloadR
   } catch (error) {
     await removeLeftovers(options.id);
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(`yt-dlp est introuvable (${config.ytdlpPath}). Installe-le ou renseigne YTDLP_PATH.`);
+      throw new Error(`yt-dlp not found (${config.ytdlpPath}). Install it or set YTDLP_PATH.`);
     }
     throw error;
   } finally {
@@ -228,7 +228,7 @@ export async function downloadAudio(options: DownloadOptions): Promise<DownloadR
 
   if (aborted || timedOut) {
     await removeLeftovers(options.id);
-    throw new Error(aborted ? "Téléchargement annulé." : "Le téléchargement a pris trop de temps.");
+    throw new Error(aborted ? "Download cancelled." : "Download took too long.");
   }
 
   // The exit code is not a reliable verdict: --max-filesize and --match-filter both stop the
@@ -241,7 +241,7 @@ export async function downloadAudio(options: DownloadOptions): Promise<DownloadR
   const resolved = resolve(filePath);
   if (dirname(resolved) !== resolve(config.uploadsDir) || !basename(resolved).startsWith(`${options.id}.`)) {
     await removeLeftovers(options.id);
-    throw new Error("Le téléchargement a produit un fichier inattendu.");
+    throw new Error("Download produced an unexpected file.");
   }
 
   return { title, filename: `${sanitizeTitle(title)}${extname(resolved)}` };
