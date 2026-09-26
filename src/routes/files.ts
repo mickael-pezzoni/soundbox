@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Hono } from "hono";
@@ -17,6 +17,7 @@ import {
   releaseDownloadSlot,
   tryAcquireDownloadSlot,
 } from "../media/youtube.js";
+import { TrimRangeError, trimToMp3 } from "../media/trim.js";
 import { findUserVoiceChannel } from "../voice/channels.js";
 import { playFile } from "../voice/player.js";
 
@@ -248,6 +249,45 @@ filesRoute.delete("/:id", async (c) => {
   await rm(filePathFor(file.id, file.filename), { force: true });
 
   return c.json({ id, deleted: true });
+});
+
+filesRoute.post("/:id/trim", async (c) => {
+  const source = getFileById(c.req.param("id"));
+  if (!source) {
+    throw new HTTPException(404, { message: "File not found" });
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const start = body?.start;
+  const end = body?.end;
+  if (typeof start !== "number" || typeof end !== "number" || !Number.isFinite(start) || !Number.isFinite(end)) {
+    throw new HTTPException(400, { message: "start et end sont requis (en secondes)" });
+  }
+  if (start < 0 || end <= start) {
+    throw new HTTPException(400, { message: "Il faut 0 ≤ start < end" });
+  }
+
+  const requestedName = typeof body?.displayName === "string" ? body.displayName.trim() : "";
+  const displayName = (requestedName || `${source.displayName} (extrait)`).slice(0, 200);
+  const filename = `${basename(source.filename, extname(source.filename))}.mp3`;
+  const id = randomUUID();
+
+  try {
+    await trimToMp3({
+      inputPath: filePathFor(source.id, source.filename),
+      outputPath: filePathFor(id, filename),
+      start,
+      end,
+    });
+  } catch (error) {
+    throw new HTTPException(error instanceof TrimRangeError ? 400 : 500, {
+      message: error instanceof Error ? error.message : "Le découpage a échoué",
+    });
+  }
+
+  db.prepare("INSERT INTO files (id, display_name, filename) VALUES (?, ?, ?)").run(id, displayName, filename);
+
+  return c.json({ id, displayName, filename }, 201);
 });
 
 filesRoute.post("/:id/play", async (c) => {
