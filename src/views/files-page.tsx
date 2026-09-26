@@ -328,6 +328,8 @@ const CLIENT_SCRIPT = `
     deletingId: null,
     nameTouched: false,
     ytController: null,
+    trim: null,
+    trimToken: null,
   };
 
   const el = (id) => document.getElementById(id);
@@ -360,6 +362,15 @@ const CLIENT_SCRIPT = `
   const ytConfirm = el("yt-confirm");
   const ytCancel = el("yt-cancel");
 
+  const trimRow = el("trim-row");
+  const trimToggle = el("trim-toggle");
+  const trimPanel = el("trim-panel");
+  const trimWaveform = el("trim-waveform");
+  const trimPlay = el("trim-play");
+  const trimPlayLabel = el("trim-play-label");
+  const trimRange = el("trim-range");
+  const trimStatus = el("trim-status");
+
   const toast = el("toast");
   let toastTimer = null;
   function showToast(message, isError) {
@@ -389,12 +400,129 @@ const CLIENT_SCRIPT = `
     window.location.reload();
   }
 
+  // wavesurfer is only fetched the first time someone ticks "Recouper le son".
+  const WAVESURFER_URL = "https://cdn.jsdelivr.net/npm/wavesurfer.js@8.0.1/dist/wavesurfer.esm.js";
+  const REGIONS_URL = "https://cdn.jsdelivr.net/npm/wavesurfer.js@8.0.1/dist/plugins/regions.esm.js";
+  let wavesurferModules = null;
+  function loadWavesurfer() {
+    if (!wavesurferModules) {
+      wavesurferModules = Promise.all([import(WAVESURFER_URL), import(REGIONS_URL)]).then(
+        ([ws, regions]) => ({ WaveSurfer: ws.default, Regions: regions.default }),
+        (err) => {
+          wavesurferModules = null; // let a later attempt retry the download
+          throw err;
+        },
+      );
+    }
+    return wavesurferModules;
+  }
+
+  const nameModalBox = nameModal.firstElementChild;
+  function setModalWide(wide) {
+    nameModalBox.classList.toggle("max-w-md", !wide);
+    nameModalBox.classList.toggle("max-w-2xl", wide);
+  }
+
+  function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const rest = (seconds - minutes * 60).toFixed(1).padStart(4, "0");
+    return minutes + ":" + rest;
+  }
+
+  function updateTrimRange() {
+    const region = state.trim && state.trim.region;
+    trimRange.textContent = region
+      ? formatTime(region.start) + " → " + formatTime(region.end) + " (" + formatTime(region.end - region.start) + ")"
+      : "";
+  }
+
+  function destroyTrim() {
+    // Invalidates a load still in flight: its callbacks check they are still the current one.
+    state.trimToken = null;
+    if (state.trim) state.trim.ws.destroy();
+    state.trim = null;
+    trimWaveform.innerHTML = "";
+    trimPlay.disabled = true;
+    trimPlayLabel.textContent = "Écouter l'extrait";
+    trimRange.textContent = "";
+    trimStatus.textContent = "";
+  }
+
+  async function setupTrim(file) {
+    destroyTrim();
+    const token = {};
+    state.trimToken = token;
+    trimStatus.textContent = "Chargement de la forme d'onde…";
+
+    try {
+      const { WaveSurfer, Regions } = await loadWavesurfer();
+      if (state.trimToken !== token) return;
+
+      const regions = Regions.create();
+      const ws = WaveSurfer.create({
+        container: trimWaveform,
+        height: 80,
+        waveColor: "#52525b",
+        progressColor: "#818cf8",
+        cursorColor: "#e4e4e7",
+        plugins: [regions],
+      });
+      state.trim = { ws, region: null };
+
+      ws.on("decode", (duration) => {
+        if (state.trimToken !== token) return;
+        state.trim.region = regions.addRegion({
+          start: 0,
+          end: duration,
+          color: "rgba(99, 102, 241, 0.25)",
+          minLength: 0.1,
+        });
+        trimPlay.disabled = false;
+        trimStatus.textContent = "Déplace ou étire la zone pour garder seulement ce passage.";
+        updateTrimRange();
+      });
+      regions.on("region-update", updateTrimRange);
+      ws.on("play", () => (trimPlayLabel.textContent = "Pause"));
+      ws.on("pause", () => (trimPlayLabel.textContent = "Écouter l'extrait"));
+
+      await ws.loadBlob(file);
+    } catch (err) {
+      if (state.trimToken !== token) return;
+      trimStatus.textContent = wavesurferModules
+        ? "Ce format ne peut pas être affiché dans le navigateur."
+        : "Impossible de charger l'outil de découpe.";
+    }
+  }
+
+  function setTrimEnabled(enabled) {
+    trimToggle.checked = enabled;
+    trimPanel.classList.toggle("hidden", !enabled);
+    setModalWide(enabled);
+    if (enabled && state.pendingUpload) {
+      setupTrim(state.pendingUpload);
+    } else {
+      destroyTrim();
+    }
+  }
+
+  trimToggle.addEventListener("change", () => setTrimEnabled(trimToggle.checked));
+  trimPlay.addEventListener("click", () => {
+    if (!state.trim || !state.trim.region) return;
+    if (state.trim.ws.isPlaying()) {
+      state.trim.ws.pause();
+    } else {
+      state.trim.region.play(true);
+    }
+  });
+
   function setModalFile(file) {
     if (!file.type.startsWith("audio/")) {
       showToast("Seuls les fichiers audio sont acceptés", true);
       return;
     }
     state.pendingUpload = file;
+    trimRow.classList.remove("hidden");
+    if (trimToggle.checked) setupTrim(file);
     nameFileLabel.textContent = file.name;
     nameFileLabel.classList.remove("text-zinc-500");
     nameFileLabel.classList.add("text-zinc-100");
@@ -412,6 +540,8 @@ const CLIENT_SCRIPT = `
     state.nameTouched = false;
     nameModalTitle.textContent = "Ajouter un son";
     nameFileRow.classList.remove("hidden");
+    trimRow.classList.add("hidden");
+    setTrimEnabled(false);
     nameFileLabel.textContent = "Aucun fichier sélectionné";
     nameFileLabel.classList.remove("text-zinc-100");
     nameFileLabel.classList.add("text-zinc-500");
@@ -428,6 +558,8 @@ const CLIENT_SCRIPT = `
     state.editingId = id;
     nameModalTitle.textContent = "Renommer le son";
     nameFileRow.classList.add("hidden");
+    trimRow.classList.add("hidden");
+    setTrimEnabled(false);
     nameInput.value = name;
     nameModalError.textContent = "";
     show(nameModal);
@@ -437,6 +569,7 @@ const CLIENT_SCRIPT = `
 
   function closeNameModal() {
     hide(nameModal);
+    setTrimEnabled(false);
     state.pendingUpload = null;
     state.editingId = null;
   }
@@ -627,10 +760,19 @@ const CLIENT_SCRIPT = `
       return;
     }
 
+    let trim = null;
+    if (state.mode === "upload" && trimToggle.checked) {
+      if (!state.trim || !state.trim.region) {
+        nameModalError.textContent = "La forme d'onde n'est pas prête : décoche « Recouper le son » ou attends.";
+        return;
+      }
+      trim = { start: state.trim.region.start, end: state.trim.region.end };
+    }
+
     nameConfirm.disabled = true;
     try {
       if (state.mode === "upload") {
-        await uploadFile(state.pendingUpload, displayName);
+        await uploadFile(state.pendingUpload, displayName, trim);
       } else {
         await renameFile(state.editingId, displayName);
       }
@@ -643,16 +785,17 @@ const CLIENT_SCRIPT = `
     }
   });
 
-  async function uploadFile(file, displayName) {
-    const res = await fetch("/files", {
-      method: "POST",
-      headers: {
-        "Content-Type": file.type || "application/octet-stream",
-        "X-Filename": encodeURIComponent(file.name),
-        "X-Display-Name": encodeURIComponent(displayName),
-      },
-      body: file,
-    });
+  async function uploadFile(file, displayName, trim) {
+    const headers = {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-Filename": encodeURIComponent(file.name),
+      "X-Display-Name": encodeURIComponent(displayName),
+    };
+    if (trim) {
+      headers["X-Trim-Start"] = trim.start.toFixed(3);
+      headers["X-Trim-End"] = trim.end.toFixed(3);
+    }
+    const res = await fetch("/files", { method: "POST", headers, body: file });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.message || "Échec de l'envoi");
@@ -914,6 +1057,24 @@ export const FilesPage: FC<{
             <span id="name-file-label" class="min-w-0 flex-1 truncate text-sm text-zinc-500">
               Aucun fichier sélectionné
             </span>
+          </div>
+        </div>
+
+        <div id="trim-row" class="mb-4 hidden">
+          <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-zinc-300">
+            <input type="checkbox" id="trim-toggle" class="h-4 w-4 accent-indigo-500" />
+            Recouper le son
+          </label>
+          <div id="trim-panel" class="mt-3 hidden">
+            <div id="trim-waveform" class="min-h-[80px] rounded-lg bg-zinc-950 px-2"></div>
+            <div class="mt-2 flex items-center gap-3">
+              <button type="button" id="trim-play" class={BTN_SECONDARY_SM} disabled>
+                <PlayIcon />
+                <span id="trim-play-label">Écouter l'extrait</span>
+              </button>
+              <span id="trim-range" class="text-sm tabular-nums text-zinc-400"></span>
+            </div>
+            <p id="trim-status" class="mt-2 text-sm text-zinc-500"></p>
           </div>
         </div>
 

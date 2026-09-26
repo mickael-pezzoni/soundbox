@@ -117,6 +117,27 @@ export function searchFiles(query: string, limit = 25): FileRecord[] {
   }));
 }
 
+/** Validates a cut requested in seconds; throws a 400 describing what is wrong. */
+function parseTrimRange(start: unknown, end: unknown): { start: number; end: number } {
+  if (typeof start !== "number" || typeof end !== "number" || !Number.isFinite(start) || !Number.isFinite(end)) {
+    throw new HTTPException(400, { message: "start et end sont requis (en secondes)" });
+  }
+  if (start < 0 || end <= start) {
+    throw new HTTPException(400, { message: "Il faut 0 ≤ start < end" });
+  }
+  return { start, end };
+}
+
+async function trimOrThrow(inputPath: string, outputPath: string, range: { start: number; end: number }) {
+  try {
+    await trimToMp3({ inputPath, outputPath, ...range });
+  } catch (error) {
+    throw new HTTPException(error instanceof TrimRangeError ? 400 : 500, {
+      message: error instanceof Error ? error.message : "Le découpage a échoué",
+    });
+  }
+}
+
 export const filesRoute = new Hono();
 
 filesRoute.post("/", async (c) => {
@@ -146,22 +167,41 @@ filesRoute.post("/", async (c) => {
     }
   };
 
+  const trimStart = c.req.header("x-trim-start");
+  const trimEnd = c.req.header("x-trim-end");
+  if ((trimStart === undefined) !== (trimEnd === undefined)) {
+    throw new HTTPException(400, { message: "X-Trim-Start et X-Trim-End vont ensemble" });
+  }
+  // Number("") is 0: a blank header has to fail validation rather than mean "from the start".
+  const toSeconds = (value: string) => (value.trim() ? Number(value) : Number.NaN);
+  const trim = trimStart !== undefined ? parseTrimRange(toSeconds(trimStart), toSeconds(trimEnd!)) : undefined;
+
   const originalFilename = decodeHeader(rawFilename);
   const rawDisplayName = c.req.header("x-display-name");
   const displayName = rawDisplayName ? decodeHeader(rawDisplayName) : originalFilename;
   const id = randomUUID();
-  const destination = join(config.uploadsDir, `${id}${extname(originalFilename)}`);
+  // A trimmed upload is kept as the MP3 cut only: the full original is a temporary input.
+  const filename = trim ? `${basename(originalFilename, extname(originalFilename))}.mp3` : originalFilename;
+  const destination = filePathFor(id, filename);
+  const received = trim ? join(config.uploadsDir, `${id}.upload${extname(originalFilename)}`) : destination;
 
-  await pipeline(
-    Readable.fromWeb(c.req.raw.body as import("node:stream/web").ReadableStream<Uint8Array>),
-    createWriteStream(destination),
-  );
+  let stored = false;
+  try {
+    await pipeline(
+      Readable.fromWeb(c.req.raw.body as import("node:stream/web").ReadableStream<Uint8Array>),
+      createWriteStream(received),
+    );
+    if (trim) await trimOrThrow(received, destination, trim);
+    stored = true;
+  } finally {
+    if (trim || !stored) await rm(received, { force: true });
+  }
 
   db.prepare(
     "INSERT INTO files (id, display_name, filename) VALUES (?, ?, ?)",
-  ).run(id, displayName, originalFilename);
+  ).run(id, displayName, filename);
 
-  return c.json({ id, displayName, filename: originalFilename }, 201);
+  return c.json({ id, displayName, filename }, 201);
 });
 
 filesRoute.post("/youtube", async (c) => {
@@ -258,32 +298,14 @@ filesRoute.post("/:id/trim", async (c) => {
   }
 
   const body = await c.req.json().catch(() => null);
-  const start = body?.start;
-  const end = body?.end;
-  if (typeof start !== "number" || typeof end !== "number" || !Number.isFinite(start) || !Number.isFinite(end)) {
-    throw new HTTPException(400, { message: "start et end sont requis (en secondes)" });
-  }
-  if (start < 0 || end <= start) {
-    throw new HTTPException(400, { message: "Il faut 0 ≤ start < end" });
-  }
+  const range = parseTrimRange(body?.start, body?.end);
 
   const requestedName = typeof body?.displayName === "string" ? body.displayName.trim() : "";
   const displayName = (requestedName || `${source.displayName} (extrait)`).slice(0, 200);
   const filename = `${basename(source.filename, extname(source.filename))}.mp3`;
   const id = randomUUID();
 
-  try {
-    await trimToMp3({
-      inputPath: filePathFor(source.id, source.filename),
-      outputPath: filePathFor(id, filename),
-      start,
-      end,
-    });
-  } catch (error) {
-    throw new HTTPException(error instanceof TrimRangeError ? 400 : 500, {
-      message: error instanceof Error ? error.message : "Le découpage a échoué",
-    });
-  }
+  await trimOrThrow(filePathFor(source.id, source.filename), filePathFor(id, filename), range);
 
   db.prepare("INSERT INTO files (id, display_name, filename) VALUES (?, ?, ?)").run(id, displayName, filename);
 
