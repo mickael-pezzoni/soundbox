@@ -94,8 +94,20 @@ export function getActiveChannelId(guildId: string): string | undefined {
   return session?.connection.joinConfig.channelId ?? undefined;
 }
 
+/**
+ * Stops the current sound but stays in the voice channel (the idle timer will still disconnect it later).
+ * Returns false if nothing was playing.
+ */
+export function stopPlayback(guildId: string): boolean {
+  const session = sessions.get(guildId);
+  if (!session || session.player.state.status === AudioPlayerStatus.Idle) return false;
+  // Stopping emits Idle, which schedules the usual idle disconnect.
+  session.player.stop(true);
+  return true;
+}
+
 /** Stops the current sound and leaves the voice channel. Returns false if the bot wasn't in one. */
-export function stopGuild(guildId: string): boolean {
+export function disconnectGuild(guildId: string): boolean {
   const session = sessions.get(guildId);
   if (!session) return false;
   endSession(guildId, session);

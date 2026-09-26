@@ -19,7 +19,7 @@ import {
 } from "../media/youtube.js";
 import { TrimRangeError, trimToMp3 } from "../media/trim.js";
 import { findUserVoiceChannel } from "../voice/channels.js";
-import { playFile } from "../voice/player.js";
+import { getActiveChannelId, playFile, stopPlayback } from "../voice/player.js";
 
 mkdirSync(config.uploadsDir, { recursive: true });
 
@@ -352,6 +352,42 @@ filesRoute.post("/:id/trim", async (c) => {
   if (sourcePath !== destination) await rm(sourcePath, { force: true });
 
   return c.json({ id: source.id, displayName, filename });
+});
+
+// Web equivalent of /stop: stops the sound but leaves the bot in its voice channel.
+filesRoute.post("/stop", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const requestedChannelId = typeof body?.channelId === "string" && body.channelId ? body.channelId : undefined;
+  const user = getCurrentUser(c);
+  if (!user) {
+    throw new HTTPException(401, { message: "Unauthenticated" });
+  }
+
+  // The selected channel only picks the server; the bot may be in another channel of it.
+  const selected = requestedChannelId
+    ? client.channels.cache.get(requestedChannelId)
+    : findUserVoiceChannel(client.guilds.cache.values(), user.userId);
+  if (!selected || !selected.isVoiceBased()) {
+    throw new HTTPException(requestedChannelId ? 400 : 409, {
+      message: requestedChannelId ? "Salon vocal invalide" : "Rejoins un salon vocal pour arrêter le son",
+    });
+  }
+
+  const guild = selected.guild;
+  const botChannelId = getActiveChannelId(guild.id);
+  if (!botChannelId) {
+    throw new HTTPException(409, { message: "Aucun son en cours de lecture" });
+  }
+  // Same rule as /stop: you can only act on the channel you are in.
+  if (guild.voiceStates.cache.get(user.userId)?.channelId !== botChannelId) {
+    throw new HTTPException(403, { message: "Tu dois être connecté au salon vocal du bot pour arrêter le son" });
+  }
+
+  if (!stopPlayback(guild.id)) {
+    throw new HTTPException(409, { message: "Aucun son en cours de lecture" });
+  }
+
+  return c.json({ stopped: true, channelId: botChannelId });
 });
 
 filesRoute.post("/:id/play", async (c) => {

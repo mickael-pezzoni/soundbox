@@ -47,6 +47,12 @@ const PlayIcon: FC<{ class?: string }> = (props) => (
   </svg>
 );
 
+const StopIcon: FC = () => (
+  <svg class={ICON} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <rect x="5" y="5" width="10" height="10" rx="1.5" />
+  </svg>
+);
+
 const EditIcon: FC = () => (
   <svg class={ICON} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
     <path d="m13.19 3.3 3.51 3.51-9.4 9.4a2 2 0 0 1-.9.52l-3.2.89a.5.5 0 0 1-.62-.62l.89-3.2a2 2 0 0 1 .52-.9l9.2-9.6Zm1.06-1.06a2 2 0 0 1 2.83 0l.68.68a2 2 0 0 1 0 2.83l-.55.55-3.51-3.51.55-.55Z" />
@@ -785,6 +791,28 @@ const CLIENT_SCRIPT = `
     });
   });
 
+  const stopBtn = el("stop-sound");
+  stopBtn.addEventListener("click", async () => {
+    stopBtn.disabled = true;
+    try {
+      const channelId = channelSelect && channelSelect.value ? channelSelect.value : undefined;
+      const res = await fetch("/files/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Impossible d'arrêter le son");
+      }
+      showToast("Son arrêté");
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      stopBtn.disabled = false;
+    }
+  });
+
   document.querySelectorAll('[data-action="edit"]').forEach((btn) => {
     btn.addEventListener("click", () => openEditModal(btn.dataset.id, btn.dataset.name));
   });
@@ -1038,6 +1066,16 @@ export const FilesPage: FC<{
 
           <div class="order-last flex w-full sm:order-none sm:ml-auto sm:w-auto sm:flex-1 sm:justify-end">
             <ChannelPicker guilds={guilds} defaultChannelId={defaultChannelId} userChannelId={userChannelId} />
+            <button
+              type="button"
+              id="stop-sound"
+              class={`${BTN_CORE} ${VARIANT_SECONDARY} ml-2 h-10 w-10 rounded-lg sm:w-auto sm:px-3`}
+              title="Arrêter le son en cours"
+              aria-label="Arrêter le son en cours"
+            >
+              <StopIcon />
+              <span class="hidden sm:inline">Stop</span>
+            </button>
           </div>
 
           <div class="ml-auto flex items-center gap-1 sm:ml-0">

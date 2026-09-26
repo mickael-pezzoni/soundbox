@@ -9,7 +9,7 @@ import {
 } from "discord.js";
 import { config } from "./config.js";
 import { filePathFor, getFileById, searchFiles } from "./routes/files.js";
-import { getActiveChannelId, playFile, stopGuild } from "./voice/player.js";
+import { disconnectGuild, getActiveChannelId, playFile, stopPlayback } from "./voice/player.js";
 
 export const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates],
@@ -43,12 +43,17 @@ const playCommand = new SlashCommandBuilder()
 
 const stopCommand = new SlashCommandBuilder()
   .setName("stop")
+  .setDescription("Arrête le son en cours (le bot reste dans le salon vocal)")
+  .setContexts(InteractionContextType.Guild);
+
+const disconnectCommand = new SlashCommandBuilder()
+  .setName("disconnect")
   .setDescription("Arrête le son en cours et déconnecte le bot du salon vocal")
   .setContexts(InteractionContextType.Guild);
 
 async function registerCommands(guild: Guild) {
   try {
-    await guild.commands.set([playCommand.toJSON(), stopCommand.toJSON()]);
+    await guild.commands.set([playCommand.toJSON(), stopCommand.toJSON(), disconnectCommand.toJSON()]);
   } catch (error) {
     console.error(`Failed to register commands on ${guild.name}:`, error);
   }
@@ -90,6 +95,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isChatInputCommand() && interaction.commandName === "stop") {
     await handleStopCommand(interaction);
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === "disconnect") {
+    await handleDisconnectCommand(interaction);
   }
 });
 
@@ -134,29 +143,50 @@ async function handlePlayCommand(interaction: ChatInputCommandInteraction) {
   }
 }
 
-async function handleStopCommand(interaction: ChatInputCommandInteraction) {
+/** Checks the caller shares the bot's voice channel (same rule as /play); replies and returns undefined otherwise. */
+async function botChannelForCaller(
+  interaction: ChatInputCommandInteraction,
+  action: string,
+): Promise<{ guildId: string; channelId: string } | undefined> {
   if (!interaction.inCachedGuild()) {
     await interaction.reply({ content: "Cette commande doit être utilisée dans un serveur.", ephemeral: true });
-    return;
+    return undefined;
   }
 
   const botChannelId = getActiveChannelId(interaction.guild.id);
   if (!botChannelId) {
     await interaction.reply({ content: "Le bot n'est connecté à aucun salon vocal.", ephemeral: true });
-    return;
+    return undefined;
   }
 
-  // Same rule as /play: you can only act on the channel you are in.
   if (interaction.member.voice.channelId !== botChannelId) {
     await interaction.reply({
-      content: `Tu dois être connecté à <#${botChannelId}> pour arrêter le bot.`,
+      content: `Tu dois être connecté à <#${botChannelId}> pour ${action}.`,
       ephemeral: true,
     });
-    return;
+    return undefined;
   }
 
-  stopGuild(interaction.guild.id);
-  await interaction.reply(`Son arrêté, le bot a quitté <#${botChannelId}>.`);
+  return { guildId: interaction.guild.id, channelId: botChannelId };
+}
+
+async function handleStopCommand(interaction: ChatInputCommandInteraction) {
+  const target = await botChannelForCaller(interaction, "arrêter le son");
+  if (!target) return;
+
+  if (!stopPlayback(target.guildId)) {
+    await interaction.reply({ content: "Aucun son en cours de lecture.", ephemeral: true });
+    return;
+  }
+  await interaction.reply("Son arrêté.");
+}
+
+async function handleDisconnectCommand(interaction: ChatInputCommandInteraction) {
+  const target = await botChannelForCaller(interaction, "déconnecter le bot");
+  if (!target) return;
+
+  disconnectGuild(target.guildId);
+  await interaction.reply(`Le bot a quitté <#${target.channelId}>.`);
 }
 
 export function startBot() {
