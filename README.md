@@ -11,7 +11,7 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 - Salon par défaut : celui où il y a déjà des utilisateurs connectés
 - Connexion via Discord (OAuth2) : seuls les membres d'un serveur précis ont accès, toutes les routes sont protégées
 - Upload en stream (pas de fichier chargé en mémoire), audio uniquement
-- Découpe à l'upload : l'option « Recouper le son » affiche la forme d'onde ([wavesurfer.js](https://wavesurfer.xyz), chargé via CDN à la demande) pour ne garder qu'un passage, enregistré en MP3
+- Découpe à l'upload : l'option « Recouper le son » affiche la forme d'onde ([wavesurfer.js](https://wavesurfer.xyz), chargé via CDN à la demande) pour ne garder qu'un passage, enregistré en MP3. Le bouton ciseaux d'un son existant ouvre la même découpe et crée un nouveau son (l'original est gardé)
 
 ## Stack
 
@@ -95,6 +95,7 @@ Toutes les routes exigent une session, sauf `/auth/*`. Une page non authentifié
 | `POST` | `/files/youtube` | Import YouTube, body `{ "url": "..." }`, réponse en flux SSE |
 | `PATCH` | `/files/:id` | Renomme, body `{ "displayName": "..." }` |
 | `DELETE` | `/files/:id` | Supprime le fichier et son entrée |
+| `GET` | `/files/:id/audio` | Contenu du fichier audio (utilisé par la forme d'onde) |
 | `POST` | `/files/:id/trim` | Crée un nouveau son MP3 à partir d'un passage, body `{ "start": 2.5, "end": 7.8, "displayName": "..." }` (secondes, nom optionnel) |
 | `POST` | `/files/:id/play` | Joue dans un salon, body optionnel `{ "channelId": "..." }` |
 

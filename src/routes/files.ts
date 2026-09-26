@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createWriteStream, mkdirSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { createReadStream, createWriteStream, mkdirSync } from "node:fs";
+import { rm, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -289,6 +289,37 @@ filesRoute.delete("/:id", async (c) => {
   await rm(filePathFor(file.id, file.filename), { force: true });
 
   return c.json({ id, deleted: true });
+});
+
+// Only a hint for the browser: wavesurfer decodes whatever bytes it gets.
+const AUDIO_TYPES: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".opus": "audio/ogg",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".flac": "audio/flac",
+  ".webm": "audio/webm",
+};
+
+filesRoute.get("/:id/audio", async (c) => {
+  const file = getFileById(c.req.param("id"));
+  if (!file) {
+    throw new HTTPException(404, { message: "File not found" });
+  }
+
+  const path = filePathFor(file.id, file.filename);
+  const size = await stat(path).then((info) => info.size, () => undefined);
+  if (size === undefined) {
+    throw new HTTPException(404, { message: "File not found" });
+  }
+
+  return c.body(Readable.toWeb(createReadStream(path)) as ReadableStream, 200, {
+    "Content-Type": AUDIO_TYPES[extname(file.filename).toLowerCase()] ?? "application/octet-stream",
+    "Content-Length": String(size),
+    "Cache-Control": "private, no-cache",
+  });
 });
 
 filesRoute.post("/:id/trim", async (c) => {

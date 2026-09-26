@@ -63,6 +63,14 @@ const DeleteIcon: FC = () => (
   </svg>
 );
 
+const ScissorsIcon: FC = () => (
+  <svg class={ICON} viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+    <circle cx="5.5" cy="5.5" r="2.5" />
+    <circle cx="5.5" cy="14.5" r="2.5" />
+    <path d="M7.6 6.9 17 14.5M7.6 13.1 17 5.5" />
+  </svg>
+);
+
 const SpeakerIcon: FC<{ class?: string }> = (props) => (
   <svg class={props.class ?? ICON} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
     <path d="M10.5 3.75a.75.75 0 0 0-1.26-.55L5.46 6.75H3.5A1.5 1.5 0 0 0 2 8.25v3.5a1.5 1.5 0 0 0 1.5 1.5h1.96l3.78 3.55a.75.75 0 0 0 1.26-.55V3.75ZM13.9 6.1a.75.75 0 0 1 1.06 0 5.5 5.5 0 0 1 0 7.8.75.75 0 1 1-1.06-1.06 4 4 0 0 0 0-5.68.75.75 0 0 1 0-1.06Z" />
@@ -165,6 +173,17 @@ const SoundPad: FC<{ file: FileRecord }> = ({ file }) => (
         title="Renommer"
       >
         <EditIcon />
+      </button>
+      <button
+        type="button"
+        class={BTN_PAD_ACTION}
+        data-action="trim"
+        data-id={file.id}
+        data-name={file.displayName}
+        aria-label={`Couper « ${file.displayName} »`}
+        title="Couper"
+      >
+        <ScissorsIcon />
       </button>
       <button
         type="button"
@@ -364,6 +383,7 @@ const CLIENT_SCRIPT = `
 
   const trimRow = el("trim-row");
   const trimToggle = el("trim-toggle");
+  const trimToggleRow = el("trim-toggle-row");
   const trimPanel = el("trim-panel");
   const trimWaveform = el("trim-waveform");
   const trimPlay = el("trim-play");
@@ -448,7 +468,8 @@ const CLIENT_SCRIPT = `
     trimStatus.textContent = "";
   }
 
-  async function setupTrim(file) {
+  /** source: the File picked for an upload, or the URL of a sound already stored. */
+  async function setupTrim(source) {
     destroyTrim();
     const token = {};
     state.trimToken = token;
@@ -485,7 +506,7 @@ const CLIENT_SCRIPT = `
       ws.on("play", () => (trimPlayLabel.textContent = "Pause"));
       ws.on("pause", () => (trimPlayLabel.textContent = "Écouter l'extrait"));
 
-      await ws.loadBlob(file);
+      await (typeof source === "string" ? ws.load(source) : ws.loadBlob(source));
     } catch (err) {
       if (state.trimToken !== token) return;
       trimStatus.textContent = wavesurferModules
@@ -498,8 +519,9 @@ const CLIENT_SCRIPT = `
     trimToggle.checked = enabled;
     trimPanel.classList.toggle("hidden", !enabled);
     setModalWide(enabled);
-    if (enabled && state.pendingUpload) {
-      setupTrim(state.pendingUpload);
+    const source = state.mode === "trim" ? "/files/" + encodeURIComponent(state.editingId) + "/audio" : state.pendingUpload;
+    if (enabled && source) {
+      setupTrim(source);
     } else {
       destroyTrim();
     }
@@ -541,6 +563,7 @@ const CLIENT_SCRIPT = `
     nameModalTitle.textContent = "Ajouter un son";
     nameFileRow.classList.remove("hidden");
     trimRow.classList.add("hidden");
+    trimToggleRow.classList.remove("hidden");
     setTrimEnabled(false);
     nameFileLabel.textContent = "Aucun fichier sélectionné";
     nameFileLabel.classList.remove("text-zinc-100");
@@ -565,6 +588,22 @@ const CLIENT_SCRIPT = `
     show(nameModal);
     nameInput.focus();
     nameInput.select();
+  }
+
+  function openTrimModal(id, name) {
+    state.mode = "trim";
+    state.pendingUpload = null;
+    state.editingId = id;
+    nameModalTitle.textContent = "Couper « " + name + " »";
+    nameFileRow.classList.add("hidden");
+    trimRow.classList.remove("hidden");
+    // The waveform is the whole point here: no opt-in checkbox.
+    trimToggleRow.classList.add("hidden");
+    nameInput.value = name + " (extrait)";
+    nameModalError.textContent = "";
+    show(nameModal);
+    setTrimEnabled(true);
+    nameInput.focus();
   }
 
   function closeNameModal() {
@@ -738,6 +777,10 @@ const CLIENT_SCRIPT = `
     btn.addEventListener("click", () => openEditModal(btn.dataset.id, btn.dataset.name));
   });
 
+  document.querySelectorAll('[data-action="trim"]').forEach((btn) => {
+    btn.addEventListener("click", () => openTrimModal(btn.dataset.id, btn.dataset.name));
+  });
+
   document.querySelectorAll('[data-action="delete"]').forEach((btn) => {
     btn.addEventListener("click", () => {
       state.deletingId = btn.dataset.id;
@@ -761,9 +804,12 @@ const CLIENT_SCRIPT = `
     }
 
     let trim = null;
-    if (state.mode === "upload" && trimToggle.checked) {
+    if (state.mode === "trim" || (state.mode === "upload" && trimToggle.checked)) {
       if (!state.trim || !state.trim.region) {
-        nameModalError.textContent = "La forme d'onde n'est pas prête : décoche « Recouper le son » ou attends.";
+        nameModalError.textContent =
+          state.mode === "trim"
+            ? "La forme d'onde n'est pas prête."
+            : "La forme d'onde n'est pas prête : décoche « Recouper le son » ou attends.";
         return;
       }
       trim = { start: state.trim.region.start, end: state.trim.region.end };
@@ -773,6 +819,8 @@ const CLIENT_SCRIPT = `
     try {
       if (state.mode === "upload") {
         await uploadFile(state.pendingUpload, displayName, trim);
+      } else if (state.mode === "trim") {
+        await trimFile(state.editingId, displayName, trim);
       } else {
         await renameFile(state.editingId, displayName);
       }
@@ -799,6 +847,18 @@ const CLIENT_SCRIPT = `
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.message || "Échec de l'envoi");
+    }
+  }
+
+  async function trimFile(id, displayName, trim) {
+    const res = await fetch("/files/" + encodeURIComponent(id) + "/trim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start: trim.start, end: trim.end, displayName }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || "Échec du découpage");
     }
   }
 
@@ -1061,10 +1121,12 @@ export const FilesPage: FC<{
         </div>
 
         <div id="trim-row" class="mb-4 hidden">
-          <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-zinc-300">
-            <input type="checkbox" id="trim-toggle" class="h-4 w-4 accent-indigo-500" />
-            Recouper le son
-          </label>
+          <div id="trim-toggle-row">
+            <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-zinc-300">
+              <input type="checkbox" id="trim-toggle" class="h-4 w-4 accent-indigo-500" />
+              Recouper le son
+            </label>
+          </div>
           <div id="trim-panel" class="mt-3 hidden">
             <div id="trim-waveform" class="min-h-[80px] rounded-lg bg-zinc-950 px-2"></div>
             <div class="mt-2 flex items-center gap-3">
