@@ -599,11 +599,12 @@ const CLIENT_SCRIPT = `
     trimRow.classList.remove("hidden");
     // The waveform is the whole point here: no opt-in checkbox.
     trimToggleRow.classList.add("hidden");
-    nameInput.value = name + " (extrait)";
+    nameInput.value = name;
     nameModalError.textContent = "";
     show(nameModal);
     setTrimEnabled(true);
     nameInput.focus();
+    nameInput.select();
   }
 
   function closeNameModal() {
