@@ -11,6 +11,7 @@ Bot Discord "soundboard" avec une interface web de gestion. Les fichiers audio s
 - Salon par défaut : celui où il y a déjà des utilisateurs connectés
 - Connexion via Discord (OAuth2) : seuls les membres d'un serveur précis ont accès, toutes les routes sont protégées
 - Upload en stream (pas de fichier chargé en mémoire), audio uniquement
+- Découpe à l'upload : l'option « Recouper le son » affiche la forme d'onde ([wavesurfer.js](https://wavesurfer.xyz), chargé via CDN à la demande) pour ne garder qu'un passage, enregistré en MP3. Le bouton ciseaux d'un son existant ouvre la même découpe et crée un nouveau son (l'original est gardé)
 
 ## Stack
 
@@ -94,9 +95,13 @@ Toutes les routes exigent une session, sauf `/auth/*`. Une page non authentifié
 | `POST` | `/files/youtube` | Import YouTube, body `{ "url": "..." }`, réponse en flux SSE |
 | `PATCH` | `/files/:id` | Renomme, body `{ "displayName": "..." }` |
 | `DELETE` | `/files/:id` | Supprime le fichier et son entrée |
+| `GET` | `/files/:id/audio` | Contenu du fichier audio (utilisé par la forme d'onde) |
+| `POST` | `/files/:id/trim` | Crée un nouveau son MP3 à partir d'un passage, body `{ "start": 2.5, "end": 7.8, "displayName": "..." }` (secondes, nom optionnel) |
 | `POST` | `/files/:id/play` | Joue dans un salon, body optionnel `{ "channelId": "..." }` |
 
-Upload : le corps de la requête est le fichier brut, avec les en-têtes `Content-Type: audio/*`, `X-Filename` (nom d'origine, encodé avec `encodeURIComponent`) et `X-Display-Name` (optionnel, sinon le nom du fichier). Un autre type de contenu renvoie `415`.
+Upload : le corps de la requête est le fichier brut, avec les en-têtes `Content-Type: audio/*`, `X-Filename` (nom d'origine, encodé avec `encodeURIComponent`) et `X-Display-Name` (optionnel, sinon le nom du fichier). Un autre type de contenu renvoie `415`. Avec `X-Trim-Start` et `X-Trim-End` (en secondes, les deux ensemble), seul ce passage est gardé, réencodé en MP3 ; l'original n'est pas conservé.
+
+Découpe : le passage est réencodé en MP3 par ffmpeg, ce qui rend la coupe précise quel que soit le format d'origine. Un intervalle invalide ou un début au-delà de la fin du fichier renvoie `400`. Une fin au-delà de la durée s'arrête simplement à la fin.
 
 Import YouTube : une URL hors YouTube renvoie `400`, un import déjà en cours `409`. Sinon la réponse est un flux `text/event-stream` dont chaque événement est un objet JSON — `{"phase":"info","title","duration"}`, puis des `{"phase":"progress","percent","speed","eta"}`, et enfin `{"phase":"done","id","displayName"}` ou `{"phase":"error","message"}`. Un flux qui se termine sans `done` signifie que le téléchargement a échoué. Fermer la connexion annule l'import et supprime les fichiers partiels. La route est en `POST` (et non en `GET` consommable par `EventSource`) parce qu'elle télécharge et écrit en base : un `GET` serait la seule forme de requête cross-site à laquelle le cookie de session, en `SameSite=Lax`, reste exposé.
 
@@ -111,6 +116,7 @@ src/
   server.tsx          application Hono, page d'accueil
   auth/session.ts     sessions et middleware de protection
   media/youtube.ts    téléchargement audio via yt-dlp (progression, annulation, nettoyage)
+  media/trim.ts       découpe d'un passage en MP3 via ffmpeg
   routes/auth.ts      login et callback OAuth2
   routes/files.ts     API des fichiers
   voice/channels.ts   liste des salons vocaux et salon par défaut
