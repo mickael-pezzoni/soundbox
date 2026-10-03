@@ -87,19 +87,28 @@ Les variables non secrètes (`PORT`, `BASE_URL`, `DB_PATH`, `UPLOADS_DIR`) ont d
 
 Toutes les routes exigent une session, sauf `/auth/*`. Une page non authentifiée redirige vers `/auth/login`, une requête d'API reçoit un `401`.
 
+L'interface est une application monopage : `GET /` ne renvoie que le HTML, puis le navigateur charge les sons, les favoris et les salons depuis `/api` et rafraîchit l'affichage sans recharger la page. La page et la recherche restent dans l'URL (`/?page=2&q=bruh`).
+
 | Méthode | Route | Description |
 | --- | --- | --- |
-| `GET` | `/` | Page de gestion (`?page=N`) |
+| `GET` | `/` | Page de l'application (HTML seul) |
 | `GET` | `/health` | Statut |
 | `GET` | `/auth/login` | Redirige vers Discord |
 | `GET` | `/auth/callback` | Retour OAuth2, crée la session |
-| `POST` | `/files` | Upload en stream (voir ci-dessous) |
-| `POST` | `/files/youtube` | Import YouTube, body `{ "url": "..." }`, réponse en flux SSE |
-| `PATCH` | `/files/:id` | Renomme, body `{ "displayName": "..." }` |
-| `DELETE` | `/files/:id` | Supprime le fichier et son entrée |
-| `GET` | `/files/:id/audio` | Contenu du fichier audio (utilisé par la forme d'onde) |
-| `POST` | `/files/:id/trim` | Remplace le son par un passage, réencodé en MP3 (même id), body `{ "start": 2.5, "end": 7.8, "displayName": "..." }` (secondes ; nom optionnel, sinon inchangé) |
-| `POST` | `/files/:id/play` | Joue dans un salon, body optionnel `{ "channelId": "..." }` |
+| `POST` | `/auth/logout` | Ferme la session |
+| `GET` | `/api/me` | Utilisateur connecté `{ userId, username }` |
+| `GET` | `/api/channels` | Salons vocaux par serveur, avec `defaultChannelId` et `userChannelId` |
+| `GET` | `/api/favorites` | Favoris de l'utilisateur `{ files }` |
+| `GET` | `/api/files` | Sons paginés (96 par page), `?page=N&q=recherche`, réponse `{ files, pagination }` |
+| `POST` | `/api/files` | Upload en stream (voir ci-dessous) |
+| `POST` | `/api/files/youtube` | Import YouTube, body `{ "url": "..." }`, réponse en flux SSE |
+| `PATCH` | `/api/files/:id` | Renomme, body `{ "displayName": "..." }` |
+| `DELETE` | `/api/files/:id` | Supprime le fichier et son entrée |
+| `GET` | `/api/files/:id/audio` | Contenu du fichier audio (utilisé par la forme d'onde) |
+| `POST` | `/api/files/:id/trim` | Remplace le son par un passage, réencodé en MP3 (même id), body `{ "start": 2.5, "end": 7.8, "displayName": "..." }` (secondes ; nom optionnel, sinon inchangé) |
+| `POST` | `/api/files/:id/play` | Joue dans un salon, body optionnel `{ "channelId": "..." }` |
+| `POST` | `/api/files/stop` | Arrête le son en cours, body optionnel `{ "channelId": "..." }` |
+| `PUT` / `DELETE` | `/api/files/:id/favorite` | Ajoute ou retire un son des favoris |
 
 Upload : le corps de la requête est le fichier brut, avec les en-têtes `Content-Type: audio/*`, `X-Filename` (nom d'origine, encodé avec `encodeURIComponent`) et `X-Display-Name` (optionnel, sinon le nom du fichier). Un autre type de contenu renvoie `415`. Avec `X-Trim-Start` et `X-Trim-End` (en secondes, les deux ensemble), seul ce passage est gardé, réencodé en MP3 ; l'original n'est pas conservé.
 
@@ -115,15 +124,17 @@ src/
   config.ts           variables d'environnement
   db.ts               connexion SQLite et tables (files, sessions)
   bot.ts              client Discord, commandes /play et /stop
-  server.tsx          application Hono, page d'accueil
+  server.tsx          application Hono, sert la page et monte /api
   auth/session.ts     sessions et middleware de protection
   media/youtube.ts    téléchargement audio via yt-dlp (progression, annulation, nettoyage)
   media/trim.ts       découpe d'un passage en MP3 via ffmpeg
   routes/auth.ts      login et callback OAuth2
+  routes/api.ts       routes /api (profil, salons, favoris, fichiers)
   routes/files.ts     API des fichiers
   voice/channels.ts   liste des salons vocaux et salon par défaut
   voice/player.ts     connexion vocale et lecture
-  views/files-page.tsx  page de gestion (JSX)
+  views/files-page.tsx  coquille HTML de l'application et script client
+  views/theme.ts      style commun (fond, police)
 ```
 
 ## Notes

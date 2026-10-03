@@ -1,16 +1,11 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
-import { getCurrentUser, requireAuth } from "./auth/session.js";
-import { guildsSharedWith } from "./bot.js";
+import { requireAuth } from "./auth/session.js";
 import { config } from "./config.js";
+import { apiRoute } from "./routes/api.js";
 import { authRoute } from "./routes/auth.js";
-import { filesRoute, listFavorites, listFiles } from "./routes/files.js";
-import { listGuildVoiceInfo, pickDefaultChannelId } from "./voice/channels.js";
-import { FilesPage } from "./views/files-page.js";
-
-// Fills whole rows of the tile grid for 2, 3, 4, 6, 8 or 12 columns.
-const PAGE_SIZE = 96;
+import { AppShell } from "./views/files-page.js";
 
 export const app = new Hono();
 
@@ -18,34 +13,11 @@ app.get("/favicon.ico", serveStatic({ path: "./public/favicon.ico" }));
 
 app.use("*", requireAuth);
 
-app.get("/", async (c) => {
-  const page = Number(c.req.query("page") ?? 1);
-  const query = c.req.query("q")?.trim() ?? "";
-  const { files, pagination } = listFiles(page, PAGE_SIZE, query);
-
-  const user = getCurrentUser(c);
-  const favorites = user ? listFavorites(user.userId) : [];
-  const guilds = listGuildVoiceInfo(user ? await guildsSharedWith(user.userId) : []);
-  const channels = guilds.flatMap((guild) => guild.channels);
-  const defaultChannelId = pickDefaultChannelId(channels, user?.userId);
-  const userChannelId = user ? channels.find((channel) => channel.memberIds.includes(user.userId))?.id : undefined;
-
-  return c.html(
-    "<!DOCTYPE html>" +
-    <FilesPage
-      files={files}
-      favorites={favorites}
-      pagination={pagination}
-      query={query}
-      guilds={guilds}
-      defaultChannelId={defaultChannelId}
-      userChannelId={userChannelId}
-      username={user?.username}
-    />,
-  );
-});
+// The app renders in the browser: the page itself carries no data, it all comes from /api.
+const shell = "<!DOCTYPE html>" + (<AppShell />);
+app.get("/", (c) => c.html(shell));
 app.get("/health", (c) => c.json({ status: "healthy" }));
-app.route("/files", filesRoute);
+app.route("/api", apiRoute);
 app.route("/auth", authRoute);
 
 export function startServer() {
