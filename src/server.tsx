@@ -9,6 +9,9 @@ import { filesRoute, listFiles } from "./routes/files.js";
 import { listGuildVoiceInfo, pickDefaultChannelId } from "./voice/channels.js";
 import { FilesPage } from "./views/files-page.js";
 
+// Fills whole rows of the tile grid for 2, 3, 4, 6, 8 or 12 columns.
+const PAGE_SIZE = 96;
+
 export const app = new Hono();
 
 app.get("/favicon.ico", serveStatic({ path: "./public/favicon.ico" }));
@@ -18,7 +21,7 @@ app.use("*", requireAuth);
 app.get("/", async (c) => {
   const page = Number(c.req.query("page") ?? 1);
   const query = c.req.query("q")?.trim() ?? "";
-  const { files, pagination } = listFiles(page, 20, query);
+  const { files, pagination } = listFiles(page, PAGE_SIZE, query);
 
   const user = getCurrentUser(c);
   const guilds = listGuildVoiceInfo(user ? await guildsSharedWith(user.userId) : []);

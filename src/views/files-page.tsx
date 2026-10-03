@@ -19,7 +19,7 @@ const BTN_SECONDARY_SM = `${BTN_CORE} ${SIZE_SM} ${VARIANT_SECONDARY}`;
 const BTN_DANGER = `${BTN_CORE} ${SIZE_MD} ${VARIANT_DANGER}`;
 const BTN_ICON_SM = `${BTN_CORE} h-8 w-8 rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:ring-indigo-400`;
 const BTN_PAD_ACTION =
-  "inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-950/80 text-zinc-400 backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400";
+  "inline-flex h-7 w-7 items-center justify-center rounded-md bg-zinc-950/80 text-zinc-400 backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400";
 const FIELD =
   "rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
@@ -150,25 +150,19 @@ const SoundPad: FC<{ file: FileRecord }> = ({ file }) => (
   <li class="group relative">
     <button
       type="button"
-      class="flex h-full min-h-[8.5rem] w-full flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left transition hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 active:translate-y-0 disabled:cursor-wait data-[playing=true]:border-indigo-500 data-[playing=true]:bg-indigo-950/40"
+      class="flex h-full min-h-[5.5rem] w-full flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900 p-2.5 text-left transition hover:border-zinc-700 hover:bg-zinc-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait data-[playing=true]:border-indigo-500 data-[playing=true]:bg-indigo-950/40"
       data-action="play"
       data-id={file.id}
       data-name={file.displayName}
-      title={`Jouer « ${file.displayName} »`}
+      title={`Jouer « ${file.displayName} » · ${fileExtension(file.filename)} · ${formatDate(file.createdAt)}`}
     >
-      <span class={`relative flex h-10 w-10 items-center justify-center rounded-full ${toneFor(file.id)}`}>
+      <span class={`relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${toneFor(file.id)}`}>
         <span class="pad-ping absolute inset-0 hidden animate-ping rounded-full bg-current opacity-30"></span>
-        <PlayIcon class="ml-0.5 h-4 w-4" />
+        <PlayIcon class="ml-0.5 h-3.5 w-3.5" />
       </span>
-      <span class="line-clamp-2 break-words pr-2 font-medium leading-snug text-zinc-100">{file.displayName}</span>
-      <span class="mt-auto flex items-center gap-2 text-xs text-zinc-500" title={file.filename}>
-        <span class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-zinc-400">
-          {fileExtension(file.filename)}
-        </span>
-        {formatDate(file.createdAt)}
-      </span>
+      <span class="line-clamp-2 break-words text-sm font-medium leading-snug text-zinc-100">{file.displayName}</span>
     </button>
-    <div class="absolute right-2 top-2 flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+    <div class="absolute right-1.5 top-1.5 flex gap-0.5 transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
       <button
         type="button"
         class={BTN_PAD_ACTION}
@@ -1056,7 +1050,7 @@ export const FilesPage: FC<{
     </head>
     <body class="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 antialiased">
       <header class="sticky top-0 z-20 border-b border-zinc-800/80 bg-zinc-950/85 backdrop-blur">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
+        <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
           <a href="/" class="flex items-center gap-2.5 font-semibold tracking-tight">
             <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
               <SpeakerIcon />
@@ -1095,7 +1089,7 @@ export const FilesPage: FC<{
         </div>
       </header>
 
-      <main class="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+      <main class="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
         <div class="mb-5">
           <h1 class="text-2xl font-semibold tracking-tight">Sons</h1>
           <p class="mt-0.5 text-sm text-zinc-500">
@@ -1139,7 +1133,7 @@ export const FilesPage: FC<{
           {files.length === 0 ? (
             <EmptyState query={query} />
           ) : (
-            <ul class="grid content-start grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <ul class="grid content-start grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2">
               {files.map((file) => (
                 <SoundPad file={file} />
               ))}
