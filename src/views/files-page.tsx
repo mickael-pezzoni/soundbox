@@ -1,6 +1,4 @@
 import type { Child, FC } from "hono/jsx";
-import type { FileRecord, Pagination } from "../routes/files.js";
-import { formatChannelLabel, type GuildVoiceInfo } from "../voice/channels.js";
 import { STICKER_BODY, STICKER_CSS, STICKER_FONT_URL } from "./theme.js";
 
 // Buttons are composed from core + size + variant, never by appending overrides: with Tailwind the
@@ -32,16 +30,10 @@ const PAD_TONES = ["bg-yellow-300", "bg-pink-400", "bg-sky-400", "bg-emerald-300
 // Stickers are stuck on slightly askew; the tilt comes from the id so it stays put between reloads.
 const PAD_TILTS = ["-rotate-[1.5deg]", "-rotate-[0.75deg]", "rotate-0", "rotate-[0.75deg]", "rotate-[1.5deg]"];
 
-function hashOf(id: string): number {
-  let hash = 0;
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return hash;
-}
-
-function toneFor(id: string): string {
-  const hash = hashOf(id);
-  return `${PAD_TONES[hash % PAD_TONES.length]} ${PAD_TILTS[(hash >>> 3) % PAD_TILTS.length]}`;
-}
+// Hover-only controls on devices that can hover; always visible on touch screens.
+const REVEAL_ON_HOVER =
+  "transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100";
+const FAVORITE_ON = "!bg-yellow-300";
 
 const ICON = "h-4 w-4 flex-shrink-0";
 
@@ -139,123 +131,52 @@ const LogoutIcon: FC = () => (
   </svg>
 );
 
-function formatDate(iso: string): string {
-  const date = new Date(`${iso.replace(" ", "T")}Z`);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function fileExtension(filename: string): string {
-  const dot = filename.lastIndexOf(".");
-  return dot > 0 ? filename.slice(dot + 1).toUpperCase() : "AUDIO";
-}
-
-function pageHref(page: number, query: string): string {
-  const params = new URLSearchParams({ page: String(page) });
-  if (query) params.set("q", query);
-  return `/?${params}`;
-}
-
-const SoundPad: FC<{ file: FileRecord; favorite: boolean }> = ({ file, favorite }) => (
-  <li class="group relative">
-    <button
-      type="button"
-      class={`sound-pad relative flex aspect-square w-full flex-col justify-end overflow-hidden rounded-2xl border-2 border-zinc-950 p-3 text-left text-zinc-950 shadow-[4px_4px_0_#09090b] transition hover:-translate-y-0.5 hover:rotate-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-950/30 active:translate-x-[3px] active:translate-y-[3px] active:shadow-[1px_1px_0_#09090b] disabled:cursor-wait ${toneFor(file.id)}`}
-      data-action="play"
-      data-id={file.id}
-      data-name={file.displayName}
-      title={`Jouer « ${file.displayName} » · ${fileExtension(file.filename)} · ${formatDate(file.createdAt)}`}
-    >
-      <span class="pad-ping pointer-events-none absolute inset-0 hidden animate-pulse bg-white/30"></span>
-      <span class="relative line-clamp-3 break-words text-base font-extrabold leading-tight tracking-tight">{file.displayName}</span>
-    </button>
-    <div class="absolute -right-1.5 -top-1.5 flex gap-1">
-      <div class="flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+// Cloned and filled by the client script for every sound it renders.
+const PadTemplate: FC = () => (
+  <template id="pad-template">
+    <li class="group relative">
       <button
         type="button"
-        class={BTN_PAD_ACTION}
-        data-action="edit"
-        data-id={file.id}
-        data-name={file.displayName}
-        aria-label={`Renommer « ${file.displayName} »`}
-        title="Renommer"
+        class="sound-pad relative flex aspect-square w-full flex-col justify-end overflow-hidden rounded-2xl border-2 border-zinc-950 p-3 text-left text-zinc-950 shadow-[4px_4px_0_#09090b] transition hover:-translate-y-0.5 hover:rotate-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-950/30 active:translate-x-[3px] active:translate-y-[3px] active:shadow-[1px_1px_0_#09090b] disabled:cursor-wait"
+        data-action="play"
       >
-        <EditIcon />
+        <span class="pad-ping pointer-events-none absolute inset-0 hidden animate-pulse bg-white/30"></span>
+        <span data-field="name" class="relative line-clamp-3 break-words text-base font-extrabold leading-tight tracking-tight"></span>
       </button>
-      <button
-        type="button"
-        class={BTN_PAD_ACTION}
-        data-action="trim"
-        data-id={file.id}
-        data-name={file.displayName}
-        aria-label={`Couper « ${file.displayName} »`}
-        title="Couper"
-      >
-        <ScissorsIcon />
-      </button>
-      <button
-        type="button"
-        class={`${BTN_PAD_ACTION} hover:!bg-red-400`}
-        data-action="delete"
-        data-id={file.id}
-        data-name={file.displayName}
-        aria-label={`Supprimer « ${file.displayName} »`}
-        title="Supprimer"
-      >
-        <DeleteIcon />
-      </button>
+      <div class="absolute -right-1.5 -top-1.5 flex gap-1">
+        <div class={`flex gap-1 ${REVEAL_ON_HOVER}`}>
+          <button type="button" class={BTN_PAD_ACTION} data-action="edit" title="Renommer">
+            <EditIcon />
+          </button>
+          <button type="button" class={BTN_PAD_ACTION} data-action="trim" title="Couper">
+            <ScissorsIcon />
+          </button>
+          <button type="button" class={`${BTN_PAD_ACTION} hover:!bg-red-400`} data-action="delete" title="Supprimer">
+            <DeleteIcon />
+          </button>
+        </div>
+        <button type="button" class={BTN_PAD_ACTION} data-action="favorite">
+          <StarIcon />
+        </button>
       </div>
-      <button
-        type="button"
-        class={`${BTN_PAD_ACTION} ${
-          favorite
-            ? "!bg-yellow-300"
-            : "transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
-        }`}
-        data-action="favorite"
-        data-id={file.id}
-        data-favorite={String(favorite)}
-        aria-pressed={String(favorite)}
-        aria-label={favorite ? `Retirer « ${file.displayName} » des favoris` : `Ajouter « ${file.displayName} » aux favoris`}
-        title={favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
-      >
-        <StarIcon />
-      </button>
-    </div>
-  </li>
+    </li>
+  </template>
 );
 
 const PAD_GRID =
   "grid content-start grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-x-3 gap-y-4 sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] sm:gap-x-4 sm:gap-y-5";
 
-const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string; userChannelId?: string }> = ({
-  guilds,
-  defaultChannelId,
-  userChannelId,
-}) => (
+const ChannelPicker: FC = () => (
   <div class="flex h-11 min-w-0 flex-1 items-center gap-1 rounded-xl border-2 border-zinc-950 bg-white pl-3 pr-1 shadow-[3px_3px_0_#09090b] sm:max-w-sm">
     <SpeakerIcon class="h-4 w-4 flex-shrink-0 text-zinc-950" />
-    {guilds.length === 0 ? (
-      <span class="min-w-0 flex-1 truncate px-2 text-sm font-medium text-zinc-500">Aucun salon vocal disponible</span>
-    ) : (
-      <select
-        id="channel-select"
-        aria-label="Salon vocal"
-        data-user-channel={userChannelId ?? ""}
-        class="h-full min-w-0 flex-1 cursor-pointer truncate bg-transparent px-2 text-sm font-bold text-zinc-950 focus:outline-none"
-      >
-        {guilds.map((guild) => (
-          <optgroup label={guild.name} class="bg-white text-zinc-500">
-            {guild.channels.map((channel) => (
-              <option value={channel.id} selected={channel.id === defaultChannelId} class="bg-white text-zinc-950">
-                {formatChannelLabel(channel)}
-                {channel.id === userChannelId ? " · toi" : ""}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-    )}
+    <span id="no-channel" class="min-w-0 flex-1 truncate px-2 text-sm font-medium text-zinc-500">
+      Chargement des salons…
+    </span>
+    <select
+      id="channel-select"
+      aria-label="Salon vocal"
+      class="hidden h-full min-w-0 flex-1 cursor-pointer truncate bg-transparent px-2 text-sm font-bold text-zinc-950 focus:outline-none"
+    ></select>
     <button
       type="button"
       id="refresh-channels"
@@ -268,8 +189,8 @@ const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string; u
   </div>
 );
 
-const SearchBar: FC<{ query: string }> = ({ query }) => (
-  <form method="get" action="/" role="search" class="relative min-w-0 flex-1">
+const SearchBar: FC = () => (
+  <form id="search-form" role="search" class="relative min-w-0 flex-1">
     <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-zinc-950">
       <SearchIcon />
     </span>
@@ -277,66 +198,51 @@ const SearchBar: FC<{ query: string }> = ({ query }) => (
       type="search"
       id="search-input"
       name="q"
-      value={query}
       placeholder="Rechercher un son…"
       aria-label="Rechercher un son"
       maxlength={200}
+      autocomplete="off"
       class={`${FIELD} h-11 w-full pl-9 pr-16 [&::-webkit-search-cancel-button]:hidden`}
     />
-    {query ? (
-      <a
-        href="/"
-        class="absolute inset-y-0 right-2 my-2 flex items-center rounded-md px-2 text-xs font-bold text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
-      >
-        Effacer
-      </a>
-    ) : (
-      <kbd class="pointer-events-none absolute inset-y-0 right-2 my-2.5 hidden items-center rounded border-2 border-zinc-300 px-1.5 font-mono text-[10px] text-zinc-500 sm:flex">
-        /
-      </kbd>
-    )}
+    <button
+      type="button"
+      id="search-clear"
+      class="absolute inset-y-0 right-2 my-2 hidden flex items-center rounded-md px-2 text-xs font-bold text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+    >
+      Effacer
+    </button>
+    <kbd
+      id="search-hint"
+      class="pointer-events-none absolute inset-y-0 right-2 my-2.5 hidden items-center rounded border-2 border-zinc-300 px-1.5 font-mono text-[10px] text-zinc-500 sm:flex"
+    >
+      /
+    </kbd>
   </form>
 );
 
-const PaginationBar: FC<{ pagination: Pagination; query: string }> = ({ pagination, query }) => {
-  if (pagination.totalPages <= 1) return null;
+const PaginationBar: FC = () => (
+  <nav id="pagination" class="mt-auto hidden flex items-center justify-center gap-3 pt-8 text-sm" aria-label="Pagination">
+    <button type="button" id="page-prev" class={BTN_SECONDARY_SM}>
+      ← Précédent
+    </button>
+    <span id="page-label" class="rounded-full bg-zinc-950 px-3 py-1 font-bold tabular-nums text-white"></span>
+    <button type="button" id="page-next" class={BTN_SECONDARY_SM}>
+      Suivant →
+    </button>
+  </nav>
+);
 
-  const linkClass = BTN_SECONDARY_SM;
-  const disabledClass = "inline-flex h-9 items-center px-3 text-sm font-bold text-zinc-400";
-
-  return (
-    <nav class="mt-auto flex items-center justify-center gap-3 pt-8 text-sm" aria-label="Pagination">
-      {pagination.page > 1 ? (
-        <a class={linkClass} href={pageHref(pagination.page - 1, query)}>
-          ← Précédent
-        </a>
-      ) : (
-        <span class={disabledClass}>← Précédent</span>
-      )}
-      <span class="rounded-full bg-zinc-950 px-3 py-1 font-bold tabular-nums text-white">
-        {pagination.page} / {pagination.totalPages}
-      </span>
-      {pagination.page < pagination.totalPages ? (
-        <a class={linkClass} href={pageHref(pagination.page + 1, query)}>
-          Suivant →
-        </a>
-      ) : (
-        <span class={disabledClass}>Suivant →</span>
-      )}
-    </nav>
-  );
-};
-
-const EmptyState: FC<{ query: string }> = ({ query }) =>
-  query ? (
-    <div class="flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-zinc-950 bg-white p-8 text-center shadow-[6px_6px_0_#09090b]">
-      <p class="text-lg font-bold">Aucun son ne correspond à « {query} ».</p>
-      <a href="/" class={BTN_SECONDARY}>
+const EmptyStates: FC = () => (
+  <>
+    <div id="empty-search" class="hidden flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-zinc-950 bg-white p-8 text-center shadow-[6px_6px_0_#09090b]">
+      <p class="text-lg font-bold">
+        Aucun son ne correspond à « <span id="empty-search-query"></span> ».
+      </p>
+      <button type="button" id="show-all" class={BTN_SECONDARY}>
         Voir tous les sons
-      </a>
+      </button>
     </div>
-  ) : (
-    <div class="flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-zinc-950 bg-white/60 p-8 text-center">
+    <div id="empty-library" class="hidden flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-zinc-950 bg-white/60 p-8 text-center">
       <span class="flex h-14 w-14 -rotate-6 items-center justify-center rounded-2xl border-2 border-zinc-950 bg-yellow-300 text-zinc-950 shadow-[3px_3px_0_#09090b]">
         <SpeakerIcon class="h-7 w-7" />
       </span>
@@ -349,7 +255,8 @@ const EmptyState: FC<{ query: string }> = ({ query }) =>
         Ajouter un son
       </button>
     </div>
-  );
+  </>
+);
 
 const Modal: FC<{ id: string; labelledBy: string; children?: Child }> = ({ id, labelledBy, children }) => (
   <div
@@ -448,8 +355,221 @@ const CLIENT_SCRIPT = `
   }
   const isOpen = (node) => !node.classList.contains("hidden");
 
-  function reload() {
-    window.location.reload();
+  /** Calls the REST API; a lost session sends the user back to the login page. */
+  async function api(path, options, fallbackMessage) {
+    const res = await fetch("/api" + path, options);
+    if (res.status === 401) {
+      window.location.href = "/auth/login";
+      throw new Error("Session expirée");
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || fallbackMessage || "Une erreur est survenue");
+    }
+    return res;
+  }
+
+  // The page and the search live in the URL, so reloads and back/forward keep the same view.
+  const PAD_TONES = ${JSON.stringify(PAD_TONES)};
+  const PAD_TILTS = ${JSON.stringify(PAD_TILTS)};
+  const FAVORITE_ON = ${JSON.stringify(FAVORITE_ON.split(" "))};
+  const FAVORITE_OFF = ${JSON.stringify(REVEAL_ON_HOVER.split(" "))};
+
+  const data = { sounds: null, pagination: null, favorites: [] };
+  const filesById = new Map();
+
+  function readView() {
+    const params = new URLSearchParams(window.location.search);
+    return { page: Math.max(1, Math.floor(Number(params.get("page"))) || 1), q: (params.get("q") || "").trim() };
+  }
+  const view = readView();
+
+  function viewUrl() {
+    const params = new URLSearchParams();
+    if (view.page > 1) params.set("page", String(view.page));
+    if (view.q) params.set("q", view.q);
+    const search = params.toString();
+    return "/" + (search ? "?" + search : "");
+  }
+
+  /** replace: for typing in the search box, which shouldn't stack one history entry per key. */
+  function navigate(next, replace) {
+    Object.assign(view, next);
+    window.history[replace ? "replaceState" : "pushState"](null, "", viewUrl());
+    syncSearch();
+    return loadSounds();
+  }
+
+  window.addEventListener("popstate", () => {
+    Object.assign(view, readView());
+    syncSearch();
+    loadSounds();
+  });
+
+  let soundsRequest = 0;
+  async function loadSounds() {
+    const request = ++soundsRequest;
+    const params = new URLSearchParams({ page: String(view.page) });
+    if (view.q) params.set("q", view.q);
+    try {
+      const res = await api("/files?" + params, undefined, "Impossible de charger les sons");
+      const body = await res.json();
+      if (request !== soundsRequest) return; // a newer search or page already replaced this one
+      // Deleting the last sound of the last page leaves the view past the end: step back.
+      if (body.files.length === 0 && view.page > body.pagination.totalPages) {
+        return navigate({ page: body.pagination.totalPages }, true);
+      }
+      data.sounds = body.files;
+      data.pagination = body.pagination;
+      render();
+    } catch (err) {
+      if (request === soundsRequest) showToast(err.message, true);
+    }
+  }
+
+  async function loadFavorites() {
+    try {
+      const res = await api("/favorites", undefined, "Impossible de charger les favoris");
+      data.favorites = (await res.json()).files;
+      render();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function refresh() {
+    return Promise.all([loadSounds(), loadFavorites()]);
+  }
+
+  function formatDate(iso) {
+    const date = new Date(iso.replace(" ", "T") + "Z");
+    if (Number.isNaN(date.getTime())) return iso;
+    return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  }
+
+  function fileExtension(filename) {
+    const dot = filename.lastIndexOf(".");
+    return dot > 0 ? filename.slice(dot + 1).toUpperCase() : "AUDIO";
+  }
+
+  // The tilt and colour come from the id, so a sticker keeps its look from one render to the next.
+  function hashOf(id) {
+    let hash = 0;
+    for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    return hash;
+  }
+
+  const padTemplate = el("pad-template");
+  function buildPad(file, favorite) {
+    const item = padTemplate.content.firstElementChild.cloneNode(true);
+    const name = "« " + file.displayName + " »";
+    const hash = hashOf(file.id);
+    const pad = item.querySelector('[data-action="play"]');
+    pad.classList.add(PAD_TONES[hash % PAD_TONES.length], PAD_TILTS[(hash >>> 3) % PAD_TILTS.length]);
+    pad.title = "Jouer " + name + " · " + fileExtension(file.filename) + " · " + formatDate(file.createdAt);
+    item.querySelector('[data-field="name"]').textContent = file.displayName;
+    item.querySelectorAll("[data-action]").forEach((btn) => (btn.dataset.id = file.id));
+    item.querySelector('[data-action="edit"]').setAttribute("aria-label", "Renommer " + name);
+    item.querySelector('[data-action="trim"]').setAttribute("aria-label", "Couper " + name);
+    item.querySelector('[data-action="delete"]').setAttribute("aria-label", "Supprimer " + name);
+    const star = item.querySelector('[data-action="favorite"]');
+    star.dataset.favorite = String(favorite);
+    star.setAttribute("aria-pressed", String(favorite));
+    star.setAttribute("aria-label", favorite ? "Retirer " + name + " des favoris" : "Ajouter " + name + " aux favoris");
+    star.title = favorite ? "Retirer des favoris" : "Ajouter aux favoris";
+    star.classList.add(...(favorite ? FAVORITE_ON : FAVORITE_OFF));
+    return item;
+  }
+
+  const soundsGrid = el("sounds-grid");
+  const favoritesSection = el("favorites-section");
+  const favoritesGrid = el("favorites-grid");
+  const favoritesCount = el("favorites-count");
+  const summary = el("summary");
+  const emptySearch = el("empty-search");
+  const emptyLibrary = el("empty-library");
+  const paginationNav = el("pagination");
+  const pagePrev = el("page-prev");
+  const pageNext = el("page-next");
+  const pageLabel = el("page-label");
+
+  function render() {
+    filesById.clear();
+    data.favorites.forEach((file) => filesById.set(file.id, file));
+
+    favoritesSection.classList.toggle("hidden", data.favorites.length === 0);
+    favoritesCount.textContent = String(data.favorites.length);
+    favoritesGrid.replaceChildren(...data.favorites.map((file) => buildPad(file, true)));
+
+    if (!data.sounds) return;
+    data.sounds.forEach((file) => filesById.set(file.id, file));
+    const favoriteIds = new Set(data.favorites.map((file) => file.id));
+    soundsGrid.replaceChildren(...data.sounds.map((file) => buildPad(file, favoriteIds.has(file.id))));
+
+    const { total, page, totalPages } = data.pagination;
+    const empty = data.sounds.length === 0;
+    soundsGrid.classList.toggle("hidden", empty);
+    emptySearch.classList.toggle("hidden", !empty || !view.q);
+    emptyLibrary.classList.toggle("hidden", !empty || Boolean(view.q));
+    el("empty-search-query").textContent = view.q;
+    summary.textContent = view.q
+      ? total + " résultat" + (total > 1 ? "s" : "") + " pour « " + view.q + " »"
+      : total + " son" + (total > 1 ? "s" : "") + " · clique sur un son pour le jouer";
+
+    paginationNav.classList.toggle("hidden", totalPages <= 1);
+    pagePrev.disabled = page <= 1;
+    pageNext.disabled = page >= totalPages;
+    pageLabel.textContent = page + " / " + totalPages;
+  }
+
+  function goToPage(page) {
+    navigate({ page });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  pagePrev.addEventListener("click", () => goToPage(view.page - 1));
+  pageNext.addEventListener("click", () => goToPage(view.page + 1));
+
+  // Results follow the typing, without reloading the page.
+  const searchForm = el("search-form");
+  const searchClear = el("search-clear");
+  const searchHint = el("search-hint");
+  function syncSearch() {
+    if (document.activeElement !== searchInput) searchInput.value = view.q;
+    searchClear.classList.toggle("hidden", !view.q);
+    searchHint.style.display = view.q ? "none" : "";
+  }
+  let searchTimer = null;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => navigate({ q: searchInput.value.trim(), page: 1 }, true), 200);
+  });
+  searchForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    clearTimeout(searchTimer);
+    navigate({ q: searchInput.value.trim(), page: 1 });
+  });
+  function clearSearch() {
+    clearTimeout(searchTimer);
+    searchInput.value = "";
+    navigate({ q: "", page: 1 });
+  }
+  searchClear.addEventListener("click", () => {
+    clearSearch();
+    searchInput.focus();
+  });
+  el("show-all").addEventListener("click", clearSearch);
+  el("home-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    clearSearch();
+  });
+
+  async function loadUser() {
+    try {
+      const res = await api("/me");
+      el("username").textContent = (await res.json()).username;
+    } catch {
+      // Only cosmetic: the name in the header stays empty.
+    }
   }
 
   // wavesurfer is only fetched the first time someone ticks "Recouper le son".
@@ -551,7 +671,8 @@ const CLIENT_SCRIPT = `
     trimToggle.checked = enabled;
     trimPanel.classList.toggle("hidden", !enabled);
     setModalWide(enabled);
-    const source = state.mode === "trim" ? "/files/" + encodeURIComponent(state.editingId) + "/audio" : state.pendingUpload;
+    const source =
+      state.mode === "trim" ? "/api/files/" + encodeURIComponent(state.editingId) + "/audio" : state.pendingUpload;
     if (enabled && source) {
       setupTrim(source);
     } else {
@@ -645,7 +766,7 @@ const CLIENT_SCRIPT = `
     hide(nameModal);
     if (state.reloadOnClose) {
       state.reloadOnClose = false;
-      reload();
+      refresh();
     }
     setTrimEnabled(false);
     state.pendingUpload = null;
@@ -682,13 +803,54 @@ const CLIENT_SCRIPT = `
   document.querySelectorAll('[data-action="youtube"]').forEach((btn) => {
     btn.addEventListener("click", openYtModal);
   });
-  el("refresh-channels").addEventListener("click", reload);
-
   // Hint only: the server is the one refusing to play in a channel the user isn't in.
   const channelSelect = el("channel-select");
   const channelWarning = el("channel-warning");
+  const noChannel = el("no-channel");
+  const refreshChannelsBtn = el("refresh-channels");
+
+  async function loadChannels() {
+    refreshChannelsBtn.disabled = true;
+    try {
+      const res = await api("/channels", undefined, "Impossible de charger les salons");
+      const body = await res.json();
+      channelSelect.replaceChildren(
+        ...body.guilds.map((guild) => {
+          const group = document.createElement("optgroup");
+          group.label = guild.name;
+          group.className = "bg-white text-zinc-500";
+          guild.channels.forEach((channel) => {
+            const option = document.createElement("option");
+            option.value = channel.id;
+            option.textContent = channel.label + (channel.id === body.userChannelId ? " · toi" : "");
+            option.className = "bg-white text-zinc-950";
+            group.append(option);
+          });
+          return group;
+        }),
+      );
+      if (body.defaultChannelId) channelSelect.value = body.defaultChannelId;
+      channelSelect.dataset.userChannel = body.userChannelId || "";
+      const hasChannels = body.guilds.length > 0;
+      channelSelect.classList.toggle("hidden", !hasChannels);
+      noChannel.classList.toggle("hidden", hasChannels);
+      noChannel.textContent = "Aucun salon vocal disponible";
+      updateChannelWarning();
+    } catch (err) {
+      noChannel.textContent = "Salons indisponibles";
+      showToast(err.message, true);
+    } finally {
+      refreshChannelsBtn.disabled = false;
+    }
+  }
+  refreshChannelsBtn.addEventListener("click", loadChannels);
+
   function updateChannelWarning() {
-    if (!channelSelect) return;
+    if (channelSelect.options.length === 0) {
+      channelWarning.textContent = "";
+      channelWarning.classList.add("hidden");
+      return;
+    }
     const userChannel = channelSelect.dataset.userChannel;
     if (!userChannel) {
       channelWarning.textContent = "Tu n'es connecté à aucun salon vocal. Rejoins-en un sur Discord, puis rafraîchis les salons (↻) pour jouer un son.";
@@ -699,10 +861,7 @@ const CLIENT_SCRIPT = `
     }
     channelWarning.classList.toggle("hidden", !channelWarning.textContent);
   }
-  if (channelSelect) {
-    channelSelect.addEventListener("change", updateChannelWarning);
-    updateChannelWarning();
-  }
+  channelSelect.addEventListener("change", updateChannelWarning);
   modalChooseBtn.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
     if (fileInput.files[0]) setModalFile(fileInput.files[0]);
@@ -780,53 +939,49 @@ const CLIENT_SCRIPT = `
   window.addEventListener("dragover", (e) => e.preventDefault());
   window.addEventListener("drop", (e) => e.preventDefault());
 
-  document.querySelectorAll('[data-action="play"]').forEach((btn) => {
-    const ping = btn.querySelector(".pad-ping");
-    let playingTimer = null;
+  const channelId = () => channelSelect.value || undefined;
 
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      try {
-        const channelId = channelSelect && channelSelect.value ? channelSelect.value : undefined;
-        const res = await fetch("/files/" + btn.dataset.id + "/play", {
+  async function playSound(btn, file) {
+    const ping = btn.querySelector(".pad-ping");
+    btn.disabled = true;
+    try {
+      await api(
+        "/files/" + encodeURIComponent(file.id) + "/play",
+        {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.message || "Échec de la lecture");
-        }
-        btn.dataset.playing = "true";
-        ping.classList.remove("hidden");
-        clearTimeout(playingTimer);
-        playingTimer = setTimeout(() => {
-          btn.dataset.playing = "false";
-          ping.classList.add("hidden");
-        }, 1500);
-        showToast("Lecture de « " + btn.dataset.name + " »");
-      } catch (err) {
-        showToast(err.message, true);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  });
+          body: JSON.stringify({ channelId: channelId() }),
+        },
+        "Échec de la lecture",
+      );
+      btn.dataset.playing = "true";
+      ping.classList.remove("hidden");
+      clearTimeout(btn.playingTimer);
+      btn.playingTimer = setTimeout(() => {
+        btn.dataset.playing = "false";
+        ping.classList.add("hidden");
+      }, 1500);
+      showToast("Lecture de « " + file.displayName + " »");
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
 
   const stopBtn = el("stop-sound");
   stopBtn.addEventListener("click", async () => {
     stopBtn.disabled = true;
     try {
-      const channelId = channelSelect && channelSelect.value ? channelSelect.value : undefined;
-      const res = await fetch("/files/stop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Impossible d'arrêter le son");
-      }
+      await api(
+        "/files/stop",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId: channelId() }),
+        },
+        "Impossible d'arrêter le son",
+      );
       showToast("Son arrêté");
     } catch (err) {
       showToast(err.message, true);
@@ -835,40 +990,54 @@ const CLIENT_SCRIPT = `
     }
   });
 
-  document.querySelectorAll('[data-action="favorite"]').forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      try {
-        const res = await fetch("/files/" + btn.dataset.id + "/favorite", {
-          method: btn.dataset.favorite === "true" ? "DELETE" : "PUT",
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.message || "Impossible de modifier les favoris");
-        }
-        reload();
-      } catch (err) {
-        showToast(err.message, true);
-        btn.disabled = false;
-      }
-    });
-  });
+  // Shown at once, then confirmed by the server; a refusal puts the previous list back.
+  async function toggleFavorite(file, isFavorite) {
+    const previous = data.favorites;
+    data.favorites = isFavorite ? previous.filter((fav) => fav.id !== file.id) : [...previous, file];
+    render();
+    try {
+      await api(
+        "/files/" + encodeURIComponent(file.id) + "/favorite",
+        { method: isFavorite ? "DELETE" : "PUT" },
+        "Impossible de modifier les favoris",
+      );
+    } catch (err) {
+      data.favorites = previous;
+      render();
+      showToast(err.message, true);
+    }
+  }
 
-  document.querySelectorAll('[data-action="edit"]').forEach((btn) => {
-    btn.addEventListener("click", () => openEditModal(btn.dataset.id, btn.dataset.name));
-  });
+  function openDeleteModal(file) {
+    state.deletingId = file.id;
+    deleteModalText.textContent = "« " + file.displayName + " » sera supprimé définitivement.";
+    show(deleteModal);
+    deleteCancel.focus();
+  }
 
-  document.querySelectorAll('[data-action="trim"]').forEach((btn) => {
-    btn.addEventListener("click", () => openTrimModal(btn.dataset.id, btn.dataset.name));
-  });
-
-  document.querySelectorAll('[data-action="delete"]').forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.deletingId = btn.dataset.id;
-      deleteModalText.textContent = "« " + btn.dataset.name + " » sera supprimé définitivement.";
-      show(deleteModal);
-      deleteCancel.focus();
-    });
+  // Pads are rebuilt on every render, so their buttons are handled once, from the document.
+  document.addEventListener("click", (e) => {
+    const btn = e.target instanceof Element ? e.target.closest("[data-action][data-id]") : null;
+    if (!btn) return;
+    const file = filesById.get(btn.dataset.id);
+    if (!file) return;
+    switch (btn.dataset.action) {
+      case "play":
+        playSound(btn, file);
+        break;
+      case "favorite":
+        toggleFavorite(file, btn.dataset.favorite === "true");
+        break;
+      case "edit":
+        openEditModal(file.id, file.displayName);
+        break;
+      case "trim":
+        openTrimModal(file.id, file.displayName);
+        break;
+      case "delete":
+        openDeleteModal(file);
+        break;
+    }
   });
 
   nameCancel.addEventListener("click", closeNameModal);
@@ -907,7 +1076,7 @@ const CLIENT_SCRIPT = `
       }
       state.reloadOnClose = false;
       closeNameModal();
-      reload();
+      refresh();
     } catch (err) {
       nameModalError.textContent = err.message || "Une erreur est survenue";
     } finally {
@@ -925,35 +1094,31 @@ const CLIENT_SCRIPT = `
       headers["X-Trim-Start"] = trim.start.toFixed(3);
       headers["X-Trim-End"] = trim.end.toFixed(3);
     }
-    const res = await fetch("/files", { method: "POST", headers, body: file });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.message || "Échec de l'envoi");
-    }
+    await api("/files", { method: "POST", headers, body: file }, "Échec de l'envoi");
   }
 
   async function trimFile(id, displayName, trim) {
-    const res = await fetch("/files/" + encodeURIComponent(id) + "/trim", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ start: trim.start, end: trim.end, displayName }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.message || "Échec du découpage");
-    }
+    await api(
+      "/files/" + encodeURIComponent(id) + "/trim",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: trim.start, end: trim.end, displayName }),
+      },
+      "Échec du découpage",
+    );
   }
 
   async function renameFile(id, displayName) {
-    const res = await fetch("/files/" + id, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.message || "Échec du renommage");
-    }
+    await api(
+      "/files/" + encodeURIComponent(id),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName }),
+      },
+      "Échec du renommage",
+    );
   }
 
   ytCancel.addEventListener("click", closeYtModal);
@@ -989,17 +1154,17 @@ const CLIENT_SCRIPT = `
     ytProgress.classList.remove("hidden");
 
     try {
-      const res = await fetch("/files/youtube", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-        signal: controller.signal,
-      });
-      // A refusal answers with JSON, not with a stream: check before reading the body as events.
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Échec de l'import");
-      }
+      // A refusal answers with JSON, not with a stream: api() turns it into an error first.
+      const res = await api(
+        "/files/youtube",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+          signal: controller.signal,
+        },
+        "Échec de l'import",
+      );
       if (!res.body) throw new Error("Réponse inattendue du serveur");
 
       const reader = res.body.getReader();
@@ -1037,7 +1202,7 @@ const CLIENT_SCRIPT = `
         openTrimModal(imported.id, imported.displayName);
         state.reloadOnClose = true;
       } else {
-        reload();
+        refresh();
       }
     } catch (err) {
       if (err.name === "AbortError") return; // cancelled from closeYtModal, which closed the modal
@@ -1056,13 +1221,9 @@ const CLIENT_SCRIPT = `
     if (!state.deletingId) return;
     deleteConfirm.disabled = true;
     try {
-      const res = await fetch("/files/" + state.deletingId, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Échec de la suppression");
-      }
+      await api("/files/" + encodeURIComponent(state.deletingId), { method: "DELETE" }, "Échec de la suppression");
       hide(deleteModal);
-      reload();
+      refresh();
     } catch (err) {
       showToast(err.message, true);
     } finally {
@@ -1070,276 +1231,258 @@ const CLIENT_SCRIPT = `
       state.deletingId = null;
     }
   });
+
+  syncSearch();
+  refresh();
+  loadChannels();
+  loadUser();
 })();
 `;
 
-export const FilesPage: FC<{
-  files: FileRecord[];
-  favorites: FileRecord[];
-  pagination: Pagination;
-  query: string;
-  guilds: GuildVoiceInfo[];
-  defaultChannelId?: string;
-  userChannelId?: string;
-  username?: string;
-}> = ({ files, favorites, pagination, query, guilds, defaultChannelId, userChannelId, username }) => {
-  const favoriteIds = new Set(favorites.map((file) => file.id));
-  return (
-    <html lang="fr" style="color-scheme: light">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Soundbox</title>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="stylesheet" href={STICKER_FONT_URL} />
-        <script src="https://cdn.tailwindcss.com"></script>
-        <style dangerouslySetInnerHTML={{ __html: STICKER_CSS }}></style>
-      </head>
-      <body class={`flex min-h-screen flex-col ${STICKER_BODY}`}>
-        <header class="sticky top-0 z-20 border-b-2 border-zinc-950 bg-[#e6ebf1]/90 backdrop-blur">
-          <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
-            <a
-              href="/"
-              class="inline-block -rotate-2 border-2 border-zinc-950 bg-yellow-300 px-2 text-2xl font-extrabold tracking-tight shadow-[3px_3px_0_#09090b] transition hover:rotate-0"
-            >
-              Soundbox!
-            </a>
+// The page is only a shell: every sound, favorite and channel is loaded by the client script from /api.
+export const AppShell: FC = () => (
+  <html lang="fr" style="color-scheme: light">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Soundbox</title>
+      <link rel="icon" href="/favicon.ico" />
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="stylesheet" href={STICKER_FONT_URL} />
+      <script src="https://cdn.tailwindcss.com"></script>
+      <style dangerouslySetInnerHTML={{ __html: STICKER_CSS }}></style>
+    </head>
+    <body class={`flex min-h-screen flex-col ${STICKER_BODY}`}>
+      <header class="sticky top-0 z-20 border-b-2 border-zinc-950 bg-[#e6ebf1]/90 backdrop-blur">
+        <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
+          <a
+            href="/"
+            id="home-link"
+            class="inline-block -rotate-2 border-2 border-zinc-950 bg-yellow-300 px-2 text-2xl font-extrabold tracking-tight shadow-[3px_3px_0_#09090b] transition hover:rotate-0"
+          >
+            Soundbox!
+          </a>
 
-            <div class="order-last flex w-full sm:order-none sm:ml-auto sm:w-auto sm:flex-1 sm:justify-end">
-              <ChannelPicker guilds={guilds} defaultChannelId={defaultChannelId} userChannelId={userChannelId} />
+          <div class="order-last flex w-full sm:order-none sm:ml-auto sm:w-auto sm:flex-1 sm:justify-end">
+            <ChannelPicker />
+            <button
+              type="button"
+              id="stop-sound"
+              class={`${BTN_TOOL} ${VARIANT_INK} ml-2`}
+              title="Arrêter le son en cours"
+              aria-label="Arrêter le son en cours"
+            >
+              <StopIcon />
+              <span class="hidden sm:inline">Stop</span>
+            </button>
+          </div>
+
+          <div class="ml-auto flex items-center gap-3 sm:ml-0">
+            <span id="username" class="hidden max-w-[10rem] truncate text-sm font-bold text-zinc-600 md:inline"></span>
+            <form method="post" action="/auth/logout" class="m-0 flex">
               <button
-                type="button"
-                id="stop-sound"
-                class={`${BTN_TOOL} ${VARIANT_INK} ml-2`}
-                title="Arrêter le son en cours"
-                aria-label="Arrêter le son en cours"
+                type="submit"
+                class={`${BTN_TOOL} ${VARIANT_SECONDARY}`}
+                title="Déconnexion"
+                aria-label="Déconnexion"
               >
-                <StopIcon />
-                <span class="hidden sm:inline">Stop</span>
+                <LogoutIcon />
+                <span class="hidden sm:inline">Déconnexion</span>
               </button>
-            </div>
-
-            <div class="ml-auto flex items-center gap-3 sm:ml-0">
-              {username ? <span class="hidden max-w-[10rem] truncate text-sm font-bold text-zinc-600 md:inline">{username}</span> : null}
-              <form method="post" action="/auth/logout" class="m-0 flex">
-                <button
-                  type="submit"
-                  class={`${BTN_TOOL} ${VARIANT_SECONDARY}`}
-                  title="Déconnexion"
-                  aria-label="Déconnexion"
-                >
-                  <LogoutIcon />
-                  <span class="hidden sm:inline">Déconnexion</span>
-                </button>
-              </form>
-            </div>
+            </form>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main class="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
-          <div class="mb-5">
-            <h1 class="text-3xl font-extrabold tracking-tight">Sons</h1>
-            <p class="mt-1 text-sm font-medium text-zinc-600">
-              {query
-                ? `${pagination.total} résultat${pagination.total > 1 ? "s" : ""} pour « ${query} »`
-                : `${pagination.total} son${pagination.total > 1 ? "s" : ""} · clique sur un son pour le jouer`}
-            </p>
-          </div>
+      <main class="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+        <div class="mb-5">
+          <h1 class="text-3xl font-extrabold tracking-tight">Sons</h1>
+          <p id="summary" class="mt-1 text-sm font-medium text-zinc-600">
+            Chargement des sons…
+          </p>
+        </div>
 
-          <p
-            id="channel-warning"
-            role="status"
-            class="mb-5 hidden rounded-xl border-2 border-zinc-950 bg-yellow-200 px-4 py-3 text-sm font-semibold text-zinc-950 shadow-[3px_3px_0_#09090b]"
-          ></p>
-
-          <div class="mb-8 flex gap-3">
-            <SearchBar query={query} />
-            <button
-              type="button"
-              data-action="upload"
-              class={`${BTN_TOOL} ${VARIANT_PRIMARY}`}
-              title="Ajouter un son"
-              aria-label="Ajouter un son"
-            >
-              <PlusIcon />
-              <span class="hidden sm:inline">Ajouter un son</span>
-            </button>
-            <button
-              type="button"
-              data-action="youtube"
-              class={`${BTN_TOOL} ${VARIANT_SECONDARY}`}
-              title="Importer depuis YouTube"
-              aria-label="Importer depuis YouTube"
-            >
-              <YoutubeIcon />
-              <span class="hidden sm:inline">YouTube</span>
-            </button>
-          </div>
-
-          {favorites.length > 0 ? (
-            <section
-              class="mb-10 rounded-3xl border-2 border-zinc-950 bg-white p-4 shadow-[6px_6px_0_#09090b] sm:p-5"
-              aria-labelledby="favorites-title"
-            >
-              <h2 id="favorites-title" class="mb-4 flex items-center gap-2 text-xl font-extrabold tracking-tight">
-                Favoris
-                <span class="rounded-full bg-zinc-950 px-2.5 py-0.5 text-xs font-bold text-white">{favorites.length}</span>
-              </h2>
-              <ul class={PAD_GRID}>
-                {favorites.map((file) => (
-                  <SoundPad file={file} favorite />
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <section id="dropzone" class="relative flex flex-1 flex-col">
-            {files.length === 0 ? (
-              <EmptyState query={query} />
-            ) : (
-              <ul class={PAD_GRID}>
-                {files.map((file) => (
-                  <SoundPad file={file} favorite={favoriteIds.has(file.id)} />
-                ))}
-              </ul>
-            )}
-
-            <div
-              id="drop-overlay"
-              class="pointer-events-none absolute -inset-2 z-10 hidden flex-col items-center justify-center gap-2 rounded-3xl border-4 border-dashed border-zinc-950 bg-pink-300/90 text-zinc-950"
-            >
-              <PlusIcon />
-              <span class="text-2xl font-extrabold">Dépose le fichier audio ici</span>
-            </div>
-            <PaginationBar pagination={pagination} query={query} />
-          </section>
-
-          <input type="file" id="file-input" accept="audio/*" class="hidden" />
-        </main>
-
-        <Modal id="name-modal" labelledBy="name-modal-title">
-          <h2 id="name-modal-title" class="mb-5 text-2xl font-extrabold tracking-tight">
-            Ajouter un son
-          </h2>
-
-          <div id="name-file-row" class="mb-4">
-            <span class="mb-1.5 block text-sm font-bold text-zinc-700">Fichier audio</span>
-            <div class="flex items-center gap-3 rounded-xl border-2 border-dashed border-zinc-950 p-2">
-              <button type="button" id="modal-choose-btn" class={BTN_SECONDARY_SM}>
-                Choisir…
-              </button>
-              <span id="name-file-label" class="min-w-0 flex-1 truncate text-sm text-zinc-500">
-                Aucun fichier sélectionné
-              </span>
-            </div>
-          </div>
-
-          <div id="trim-row" class="mb-4 hidden">
-            <div id="trim-toggle-row">
-              <label class="flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-zinc-800">
-                <input type="checkbox" id="trim-toggle" class="h-4 w-4 accent-pink-500" />
-                Recouper le son
-              </label>
-            </div>
-            <p id="trim-warning" class="hidden rounded-xl border-2 border-zinc-950 bg-yellow-200 px-3 py-2 text-sm font-semibold text-zinc-950">
-              Le son d'origine sera remplacé par le passage sélectionné.
-            </p>
-            <div id="trim-panel" class="mt-3 hidden">
-              <div id="trim-waveform" class="min-h-[80px] rounded-xl border-2 border-zinc-950 bg-zinc-100 px-2"></div>
-              <div class="mt-2 flex items-center gap-3">
-                <button type="button" id="trim-play" class={BTN_SECONDARY_SM} disabled>
-                  <PlayIcon />
-                  <span id="trim-play-label">Écouter l'extrait</span>
-                </button>
-                <span id="trim-range" class="text-sm font-bold tabular-nums text-zinc-700"></span>
-              </div>
-              <p id="trim-status" class="mt-2 text-sm text-zinc-600"></p>
-            </div>
-          </div>
-
-          <label for="name-input" class="mb-1.5 block text-sm font-bold text-zinc-700">
-            Nom à afficher
-          </label>
-          <input type="text" id="name-input" maxlength={200} class={`${FIELD} h-10 w-full px-3`} />
-          <div id="name-modal-error" class="mt-2 min-h-[1.25rem] text-sm font-semibold text-red-600" role="alert"></div>
-
-          <div class="mt-4 flex justify-end gap-2">
-            <button type="button" class={BTN_SECONDARY} id="name-cancel">
-              Annuler
-            </button>
-            <button type="button" class={BTN_PRIMARY} id="name-confirm">
-              Valider
-            </button>
-          </div>
-        </Modal>
-
-        <Modal id="yt-modal" labelledBy="yt-modal-title">
-          <h2 id="yt-modal-title" class="mb-5 text-2xl font-extrabold tracking-tight">
-            Importer depuis YouTube
-          </h2>
-
-          <label for="yt-url" class="mb-1.5 block text-sm font-bold text-zinc-700">
-            Lien de la vidéo
-          </label>
-          <input
-            type="url"
-            id="yt-url"
-            placeholder="https://www.youtube.com/watch?v=…"
-            maxlength={500}
-            class={`${FIELD} h-10 w-full px-3`}
-          />
-
-          <div id="yt-progress" class="mt-4 hidden">
-            <div class="h-3 w-full overflow-hidden rounded-full border-2 border-zinc-950 bg-zinc-100">
-              <div id="yt-progress-bar" class="h-full w-0 bg-pink-400 transition-[width] duration-200"></div>
-            </div>
-            <p id="yt-status" class="mt-2 truncate text-sm text-zinc-600"></p>
-          </div>
-
-          <label class="mt-4 flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-zinc-800">
-            <input type="checkbox" id="yt-trim" class="h-4 w-4 accent-pink-500" />
-            Couper le son après l'import
-          </label>
-
-          <div id="yt-error" class="mt-2 min-h-[1.25rem] text-sm font-semibold text-red-600" role="alert"></div>
-
-          <div class="mt-4 flex justify-end gap-2">
-            <button type="button" class={BTN_SECONDARY} id="yt-cancel">
-              Annuler
-            </button>
-            <button type="button" class={BTN_PRIMARY} id="yt-confirm">
-              <YoutubeIcon />
-              Importer
-            </button>
-          </div>
-        </Modal>
-
-        <Modal id="delete-modal" labelledBy="delete-modal-title">
-          <h2 id="delete-modal-title" class="mb-2 text-2xl font-extrabold tracking-tight">
-            Supprimer ce son ?
-          </h2>
-          <p id="delete-modal-text" class="mb-6 text-sm text-zinc-600"></p>
-          <div class="flex justify-end gap-2">
-            <button type="button" class={BTN_SECONDARY} id="delete-cancel">
-              Annuler
-            </button>
-            <button type="button" class={BTN_DANGER} id="delete-confirm">
-              <DeleteIcon />
-              Supprimer
-            </button>
-          </div>
-        </Modal>
-
-        <div
-          id="toast"
+        <p
+          id="channel-warning"
           role="status"
-          aria-live="polite"
-          class="pointer-events-none fixed bottom-5 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-2 truncate rounded-xl border-2 border-zinc-950 bg-white px-4 py-2.5 text-sm font-bold text-zinc-950 opacity-0 shadow-[3px_3px_0_#09090b] transition duration-200"
-        ></div>
+          class="mb-5 hidden rounded-xl border-2 border-zinc-950 bg-yellow-200 px-4 py-3 text-sm font-semibold text-zinc-950 shadow-[3px_3px_0_#09090b]"
+        ></p>
 
-        <script dangerouslySetInnerHTML={{ __html: CLIENT_SCRIPT }}></script>
-      </body>
-    </html>
-  );
-};
+        <div class="mb-8 flex gap-3">
+          <SearchBar />
+          <button
+            type="button"
+            data-action="upload"
+            class={`${BTN_TOOL} ${VARIANT_PRIMARY}`}
+            title="Ajouter un son"
+            aria-label="Ajouter un son"
+          >
+            <PlusIcon />
+            <span class="hidden sm:inline">Ajouter un son</span>
+          </button>
+          <button
+            type="button"
+            data-action="youtube"
+            class={`${BTN_TOOL} ${VARIANT_SECONDARY}`}
+            title="Importer depuis YouTube"
+            aria-label="Importer depuis YouTube"
+          >
+            <YoutubeIcon />
+            <span class="hidden sm:inline">YouTube</span>
+          </button>
+        </div>
+
+        <section
+          id="favorites-section"
+          class="mb-10 hidden rounded-3xl border-2 border-zinc-950 bg-white p-4 shadow-[6px_6px_0_#09090b] sm:p-5"
+          aria-labelledby="favorites-title"
+        >
+          <h2 id="favorites-title" class="mb-4 flex items-center gap-2 text-xl font-extrabold tracking-tight">
+            Favoris
+            <span id="favorites-count" class="rounded-full bg-zinc-950 px-2.5 py-0.5 text-xs font-bold text-white"></span>
+          </h2>
+          <ul id="favorites-grid" class={PAD_GRID}></ul>
+        </section>
+
+        <section id="dropzone" class="relative flex flex-1 flex-col">
+          <ul id="sounds-grid" class={PAD_GRID}></ul>
+          <EmptyStates />
+
+          <div
+            id="drop-overlay"
+            class="pointer-events-none absolute -inset-2 z-10 hidden flex-col items-center justify-center gap-2 rounded-3xl border-4 border-dashed border-zinc-950 bg-pink-300/90 text-zinc-950"
+          >
+            <PlusIcon />
+            <span class="text-2xl font-extrabold">Dépose le fichier audio ici</span>
+          </div>
+          <PaginationBar />
+        </section>
+
+        <input type="file" id="file-input" accept="audio/*" class="hidden" />
+      </main>
+
+      <Modal id="name-modal" labelledBy="name-modal-title">
+        <h2 id="name-modal-title" class="mb-5 text-2xl font-extrabold tracking-tight">
+          Ajouter un son
+        </h2>
+
+        <div id="name-file-row" class="mb-4">
+          <span class="mb-1.5 block text-sm font-bold text-zinc-700">Fichier audio</span>
+          <div class="flex items-center gap-3 rounded-xl border-2 border-dashed border-zinc-950 p-2">
+            <button type="button" id="modal-choose-btn" class={BTN_SECONDARY_SM}>
+              Choisir…
+            </button>
+            <span id="name-file-label" class="min-w-0 flex-1 truncate text-sm text-zinc-500">
+              Aucun fichier sélectionné
+            </span>
+          </div>
+        </div>
+
+        <div id="trim-row" class="mb-4 hidden">
+          <div id="trim-toggle-row">
+            <label class="flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-zinc-800">
+              <input type="checkbox" id="trim-toggle" class="h-4 w-4 accent-pink-500" />
+              Recouper le son
+            </label>
+          </div>
+          <p id="trim-warning" class="hidden rounded-xl border-2 border-zinc-950 bg-yellow-200 px-3 py-2 text-sm font-semibold text-zinc-950">
+            Le son d'origine sera remplacé par le passage sélectionné.
+          </p>
+          <div id="trim-panel" class="mt-3 hidden">
+            <div id="trim-waveform" class="min-h-[80px] rounded-xl border-2 border-zinc-950 bg-zinc-100 px-2"></div>
+            <div class="mt-2 flex items-center gap-3">
+              <button type="button" id="trim-play" class={BTN_SECONDARY_SM} disabled>
+                <PlayIcon />
+                <span id="trim-play-label">Écouter l'extrait</span>
+              </button>
+              <span id="trim-range" class="text-sm font-bold tabular-nums text-zinc-700"></span>
+            </div>
+            <p id="trim-status" class="mt-2 text-sm text-zinc-600"></p>
+          </div>
+        </div>
+
+        <label for="name-input" class="mb-1.5 block text-sm font-bold text-zinc-700">
+          Nom à afficher
+        </label>
+        <input type="text" id="name-input" maxlength={200} class={`${FIELD} h-10 w-full px-3`} />
+        <div id="name-modal-error" class="mt-2 min-h-[1.25rem] text-sm font-semibold text-red-600" role="alert"></div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" class={BTN_SECONDARY} id="name-cancel">
+            Annuler
+          </button>
+          <button type="button" class={BTN_PRIMARY} id="name-confirm">
+            Valider
+          </button>
+        </div>
+      </Modal>
+
+      <Modal id="yt-modal" labelledBy="yt-modal-title">
+        <h2 id="yt-modal-title" class="mb-5 text-2xl font-extrabold tracking-tight">
+          Importer depuis YouTube
+        </h2>
+
+        <label for="yt-url" class="mb-1.5 block text-sm font-bold text-zinc-700">
+          Lien de la vidéo
+        </label>
+        <input
+          type="url"
+          id="yt-url"
+          placeholder="https://www.youtube.com/watch?v=…"
+          maxlength={500}
+          class={`${FIELD} h-10 w-full px-3`}
+        />
+
+        <div id="yt-progress" class="mt-4 hidden">
+          <div class="h-3 w-full overflow-hidden rounded-full border-2 border-zinc-950 bg-zinc-100">
+            <div id="yt-progress-bar" class="h-full w-0 bg-pink-400 transition-[width] duration-200"></div>
+          </div>
+          <p id="yt-status" class="mt-2 truncate text-sm text-zinc-600"></p>
+        </div>
+
+        <label class="mt-4 flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-zinc-800">
+          <input type="checkbox" id="yt-trim" class="h-4 w-4 accent-pink-500" />
+          Couper le son après l'import
+        </label>
+
+        <div id="yt-error" class="mt-2 min-h-[1.25rem] text-sm font-semibold text-red-600" role="alert"></div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" class={BTN_SECONDARY} id="yt-cancel">
+            Annuler
+          </button>
+          <button type="button" class={BTN_PRIMARY} id="yt-confirm">
+            <YoutubeIcon />
+            Importer
+          </button>
+        </div>
+      </Modal>
+
+      <Modal id="delete-modal" labelledBy="delete-modal-title">
+        <h2 id="delete-modal-title" class="mb-2 text-2xl font-extrabold tracking-tight">
+          Supprimer ce son ?
+        </h2>
+        <p id="delete-modal-text" class="mb-6 text-sm text-zinc-600"></p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class={BTN_SECONDARY} id="delete-cancel">
+            Annuler
+          </button>
+          <button type="button" class={BTN_DANGER} id="delete-confirm">
+            <DeleteIcon />
+            Supprimer
+          </button>
+        </div>
+      </Modal>
+
+      <div
+        id="toast"
+        role="status"
+        aria-live="polite"
+        class="pointer-events-none fixed bottom-5 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-2 truncate rounded-xl border-2 border-zinc-950 bg-white px-4 py-2.5 text-sm font-bold text-zinc-950 opacity-0 shadow-[3px_3px_0_#09090b] transition duration-200"
+      ></div>
+
+      <PadTemplate />
+      <script dangerouslySetInnerHTML={{ __html: CLIENT_SCRIPT }}></script>
+    </body>
+  </html>
+);

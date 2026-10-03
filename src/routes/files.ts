@@ -156,7 +156,16 @@ async function trimOrThrow(inputPath: string, outputPath: string, range: { start
   }
 }
 
+// Fills whole rows of the tile grid for 2, 3, 4, 6, 8 or 12 columns.
+const PAGE_SIZE = 96;
+
 export const filesRoute = new Hono();
+
+filesRoute.get("/", (c) => {
+  const page = Number(c.req.query("page") ?? 1) || 1;
+  const query = c.req.query("q")?.trim() ?? "";
+  return c.json(listFiles(page, PAGE_SIZE, query));
+});
 
 filesRoute.post("/", async (c) => {
   const contentType = c.req.header("content-type") ?? "";
