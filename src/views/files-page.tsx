@@ -1,42 +1,46 @@
 import type { Child, FC } from "hono/jsx";
 import type { FileRecord, Pagination } from "../routes/files.js";
 import { formatChannelLabel, type GuildVoiceInfo } from "../voice/channels.js";
+import { STICKER_BODY, STICKER_CSS, STICKER_FONT_URL } from "./theme.js";
 
 // Buttons are composed from core + size + variant, never by appending overrides: with Tailwind the
 // class order in the attribute doesn't decide which of two conflicting utilities wins.
 const BTN_CORE =
-  "inline-flex flex-shrink-0 items-center justify-center gap-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50";
-const SIZE_MD = "h-10 rounded-lg px-4";
+  "inline-flex flex-shrink-0 items-center justify-center gap-2 border-2 border-zinc-950 text-sm font-bold shadow-[3px_3px_0_#09090b] transition active:translate-x-0.5 active:translate-y-0.5 active:shadow-[1px_1px_0_#09090b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+const SIZE_MD = "h-11 rounded-xl px-4";
 const SIZE_SM = "h-9 rounded-lg px-3";
-const VARIANT_PRIMARY = "bg-indigo-600 font-medium text-white hover:bg-indigo-500 focus-visible:ring-indigo-400";
-const VARIANT_SECONDARY =
-  "border border-zinc-800 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 focus-visible:ring-indigo-400";
-const VARIANT_DANGER = "bg-red-600 font-medium text-white hover:bg-red-500 focus-visible:ring-red-400";
+const VARIANT_PRIMARY = "bg-pink-400 text-zinc-950 hover:bg-pink-300";
+const VARIANT_SECONDARY = "bg-white text-zinc-950 hover:bg-yellow-100";
+const VARIANT_INK = "bg-zinc-950 text-white hover:bg-zinc-800";
+const VARIANT_DANGER = "bg-red-500 text-white hover:bg-red-400";
 
 const BTN_PRIMARY = `${BTN_CORE} ${SIZE_MD} ${VARIANT_PRIMARY}`;
 const BTN_SECONDARY = `${BTN_CORE} ${SIZE_MD} ${VARIANT_SECONDARY}`;
 const BTN_SECONDARY_SM = `${BTN_CORE} ${SIZE_SM} ${VARIANT_SECONDARY}`;
 const BTN_DANGER = `${BTN_CORE} ${SIZE_MD} ${VARIANT_DANGER}`;
-const BTN_ICON_SM = `${BTN_CORE} h-8 w-8 rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:ring-indigo-400`;
+// Square header/toolbar button: icon only on phones, icon + label from sm up.
+const BTN_TOOL = `${BTN_CORE} h-11 w-11 rounded-xl sm:w-auto sm:px-4`;
+const BTN_ICON_SM =
+  "inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950";
 const BTN_PAD_ACTION =
-  "inline-flex h-8 w-8 items-center justify-center rounded-md bg-zinc-950/80 text-zinc-400 backdrop-blur transition-colors hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400";
+  "inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-zinc-950 bg-white text-zinc-950 transition-colors hover:bg-yellow-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950";
 const FIELD =
-  "rounded-lg border border-zinc-800 bg-zinc-900 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+  "rounded-xl border-2 border-zinc-950 bg-white text-sm font-medium text-zinc-950 placeholder:text-zinc-500 shadow-[3px_3px_0_#09090b] focus:outline-none focus:ring-2 focus:ring-pink-400";
 
 // Full class strings, so the Tailwind CDN sees them in the rendered DOM.
-const PAD_TONES = [
-  "bg-indigo-500/15 text-indigo-300",
-  "bg-emerald-500/15 text-emerald-300",
-  "bg-amber-500/15 text-amber-300",
-  "bg-rose-500/15 text-rose-300",
-  "bg-sky-500/15 text-sky-300",
-  "bg-fuchsia-500/15 text-fuchsia-300",
-];
+const PAD_TONES = ["bg-yellow-300", "bg-pink-400", "bg-sky-400", "bg-emerald-300", "bg-orange-400", "bg-violet-300"];
+// Stickers are stuck on slightly askew; the tilt comes from the id so it stays put between reloads.
+const PAD_TILTS = ["-rotate-[1.5deg]", "-rotate-[0.75deg]", "rotate-0", "rotate-[0.75deg]", "rotate-[1.5deg]"];
 
-function toneFor(id: string): string {
+function hashOf(id: string): number {
   let hash = 0;
   for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return PAD_TONES[hash % PAD_TONES.length];
+  return hash;
+}
+
+function toneFor(id: string): string {
+  const hash = hashOf(id);
+  return `${PAD_TONES[hash % PAD_TONES.length]} ${PAD_TILTS[(hash >>> 3) % PAD_TILTS.length]}`;
 }
 
 const ICON = "h-4 w-4 flex-shrink-0";
@@ -44,6 +48,12 @@ const ICON = "h-4 w-4 flex-shrink-0";
 const PlayIcon: FC<{ class?: string }> = (props) => (
   <svg class={props.class ?? ICON} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
     <path d="M6 4.5v11a.75.75 0 0 0 1.14.64l9-5.5a.75.75 0 0 0 0-1.28l-9-5.5A.75.75 0 0 0 6 4.5Z" />
+  </svg>
+);
+
+const StarIcon: FC = () => (
+  <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path d="M9.32 2.7a.75.75 0 0 1 1.36 0l1.9 3.98 4.36.56a.75.75 0 0 1 .42 1.29l-3.2 3.01.81 4.32a.75.75 0 0 1-1.1.8L10 14.55l-3.87 2.11a.75.75 0 0 1-1.1-.8l.81-4.32-3.2-3.01a.75.75 0 0 1 .42-1.29l4.36-.56 1.9-3.98Z" />
   </svg>
 );
 
@@ -146,29 +156,21 @@ function pageHref(page: number, query: string): string {
   return `/?${params}`;
 }
 
-const SoundPad: FC<{ file: FileRecord }> = ({ file }) => (
+const SoundPad: FC<{ file: FileRecord; favorite: boolean }> = ({ file, favorite }) => (
   <li class="group relative">
     <button
       type="button"
-      class="flex h-full min-h-[8.5rem] w-full flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-left transition hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 active:translate-y-0 disabled:cursor-wait data-[playing=true]:border-indigo-500 data-[playing=true]:bg-indigo-950/40"
+      class={`sound-pad relative flex aspect-square w-full flex-col justify-end overflow-hidden rounded-2xl border-2 border-zinc-950 p-3 text-left text-zinc-950 shadow-[4px_4px_0_#09090b] transition hover:-translate-y-0.5 hover:rotate-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-950/30 active:translate-x-[3px] active:translate-y-[3px] active:shadow-[1px_1px_0_#09090b] disabled:cursor-wait ${toneFor(file.id)}`}
       data-action="play"
       data-id={file.id}
       data-name={file.displayName}
-      title={`Jouer « ${file.displayName} »`}
+      title={`Jouer « ${file.displayName} » · ${fileExtension(file.filename)} · ${formatDate(file.createdAt)}`}
     >
-      <span class={`relative flex h-10 w-10 items-center justify-center rounded-full ${toneFor(file.id)}`}>
-        <span class="pad-ping absolute inset-0 hidden animate-ping rounded-full bg-current opacity-30"></span>
-        <PlayIcon class="ml-0.5 h-4 w-4" />
-      </span>
-      <span class="line-clamp-2 break-words pr-2 font-medium leading-snug text-zinc-100">{file.displayName}</span>
-      <span class="mt-auto flex items-center gap-2 text-xs text-zinc-500" title={file.filename}>
-        <span class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-zinc-400">
-          {fileExtension(file.filename)}
-        </span>
-        {formatDate(file.createdAt)}
-      </span>
+      <span class="pad-ping pointer-events-none absolute inset-0 hidden animate-pulse bg-white/30"></span>
+      <span class="relative line-clamp-3 break-words text-base font-extrabold leading-tight tracking-tight">{file.displayName}</span>
     </button>
-    <div class="absolute right-2 top-2 flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+    <div class="absolute -right-1.5 -top-1.5 flex gap-1">
+      <div class="flex gap-1 transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
       <button
         type="button"
         class={BTN_PAD_ACTION}
@@ -193,7 +195,7 @@ const SoundPad: FC<{ file: FileRecord }> = ({ file }) => (
       </button>
       <button
         type="button"
-        class={`${BTN_PAD_ACTION} hover:!bg-red-950 hover:!text-red-300`}
+        class={`${BTN_PAD_ACTION} hover:!bg-red-400`}
         data-action="delete"
         data-id={file.id}
         data-name={file.displayName}
@@ -202,30 +204,50 @@ const SoundPad: FC<{ file: FileRecord }> = ({ file }) => (
       >
         <DeleteIcon />
       </button>
+      </div>
+      <button
+        type="button"
+        class={`${BTN_PAD_ACTION} ${
+          favorite
+            ? "!bg-yellow-300"
+            : "transition-opacity [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+        }`}
+        data-action="favorite"
+        data-id={file.id}
+        data-favorite={String(favorite)}
+        aria-pressed={String(favorite)}
+        aria-label={favorite ? `Retirer « ${file.displayName} » des favoris` : `Ajouter « ${file.displayName} » aux favoris`}
+        title={favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+      >
+        <StarIcon />
+      </button>
     </div>
   </li>
 );
+
+const PAD_GRID =
+  "grid content-start grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-x-3 gap-y-4 sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] sm:gap-x-4 sm:gap-y-5";
 
 const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string; userChannelId?: string }> = ({
   guilds,
   defaultChannelId,
   userChannelId,
 }) => (
-  <div class="flex h-10 min-w-0 flex-1 items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 pl-3 pr-1 sm:max-w-sm">
-    <SpeakerIcon class="h-4 w-4 flex-shrink-0 text-zinc-500" />
+  <div class="flex h-11 min-w-0 flex-1 items-center gap-1 rounded-xl border-2 border-zinc-950 bg-white pl-3 pr-1 shadow-[3px_3px_0_#09090b] sm:max-w-sm">
+    <SpeakerIcon class="h-4 w-4 flex-shrink-0 text-zinc-950" />
     {guilds.length === 0 ? (
-      <span class="min-w-0 flex-1 truncate px-2 text-sm text-zinc-500">Aucun salon vocal disponible</span>
+      <span class="min-w-0 flex-1 truncate px-2 text-sm font-medium text-zinc-500">Aucun salon vocal disponible</span>
     ) : (
       <select
         id="channel-select"
         aria-label="Salon vocal"
         data-user-channel={userChannelId ?? ""}
-        class="h-full min-w-0 flex-1 cursor-pointer truncate bg-transparent px-2 text-sm text-zinc-100 focus:outline-none"
+        class="h-full min-w-0 flex-1 cursor-pointer truncate bg-transparent px-2 text-sm font-bold text-zinc-950 focus:outline-none"
       >
         {guilds.map((guild) => (
-          <optgroup label={guild.name} class="bg-zinc-900 text-zinc-400">
+          <optgroup label={guild.name} class="bg-white text-zinc-500">
             {guild.channels.map((channel) => (
-              <option value={channel.id} selected={channel.id === defaultChannelId} class="bg-zinc-900 text-zinc-100">
+              <option value={channel.id} selected={channel.id === defaultChannelId} class="bg-white text-zinc-950">
                 {formatChannelLabel(channel)}
                 {channel.id === userChannelId ? " · toi" : ""}
               </option>
@@ -248,7 +270,7 @@ const ChannelPicker: FC<{ guilds: GuildVoiceInfo[]; defaultChannelId?: string; u
 
 const SearchBar: FC<{ query: string }> = ({ query }) => (
   <form method="get" action="/" role="search" class="relative min-w-0 flex-1">
-    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-zinc-500">
+    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-zinc-950">
       <SearchIcon />
     </span>
     <input
@@ -259,17 +281,17 @@ const SearchBar: FC<{ query: string }> = ({ query }) => (
       placeholder="Rechercher un son…"
       aria-label="Rechercher un son"
       maxlength={200}
-      class={`${FIELD} h-10 w-full pl-9 pr-16 [&::-webkit-search-cancel-button]:hidden`}
+      class={`${FIELD} h-11 w-full pl-9 pr-16 [&::-webkit-search-cancel-button]:hidden`}
     />
     {query ? (
       <a
         href="/"
-        class="absolute inset-y-0 right-2 my-1.5 flex items-center rounded-md px-2 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+        class="absolute inset-y-0 right-2 my-2 flex items-center rounded-md px-2 text-xs font-bold text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
       >
         Effacer
       </a>
     ) : (
-      <kbd class="pointer-events-none absolute inset-y-0 right-2 my-2 hidden items-center rounded border border-zinc-700 px-1.5 font-mono text-[10px] text-zinc-500 sm:flex">
+      <kbd class="pointer-events-none absolute inset-y-0 right-2 my-2.5 hidden items-center rounded border-2 border-zinc-300 px-1.5 font-mono text-[10px] text-zinc-500 sm:flex">
         /
       </kbd>
     )}
@@ -280,10 +302,10 @@ const PaginationBar: FC<{ pagination: Pagination; query: string }> = ({ paginati
   if (pagination.totalPages <= 1) return null;
 
   const linkClass = BTN_SECONDARY_SM;
-  const disabledClass = `${BTN_CORE} ${SIZE_SM} border border-transparent text-zinc-600`;
+  const disabledClass = "inline-flex h-9 items-center px-3 text-sm font-bold text-zinc-400";
 
   return (
-    <nav class="mt-auto flex pt-6 items-center justify-center gap-2 text-sm text-zinc-400" aria-label="Pagination">
+    <nav class="mt-auto flex items-center justify-center gap-3 pt-8 text-sm" aria-label="Pagination">
       {pagination.page > 1 ? (
         <a class={linkClass} href={pageHref(pagination.page - 1, query)}>
           ← Précédent
@@ -291,7 +313,7 @@ const PaginationBar: FC<{ pagination: Pagination; query: string }> = ({ paginati
       ) : (
         <span class={disabledClass}>← Précédent</span>
       )}
-      <span class="px-2 tabular-nums">
+      <span class="rounded-full bg-zinc-950 px-3 py-1 font-bold tabular-nums text-white">
         {pagination.page} / {pagination.totalPages}
       </span>
       {pagination.page < pagination.totalPages ? (
@@ -307,20 +329,20 @@ const PaginationBar: FC<{ pagination: Pagination; query: string }> = ({ paginati
 
 const EmptyState: FC<{ query: string }> = ({ query }) =>
   query ? (
-    <div class="flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-zinc-800 p-8 text-center">
-      <p class="text-zinc-300">Aucun son ne correspond à « {query} ».</p>
+    <div class="flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-zinc-950 bg-white p-8 text-center shadow-[6px_6px_0_#09090b]">
+      <p class="text-lg font-bold">Aucun son ne correspond à « {query} ».</p>
       <a href="/" class={BTN_SECONDARY}>
         Voir tous les sons
       </a>
     </div>
   ) : (
-    <div class="flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-zinc-800 p-8 text-center">
-      <span class="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500/15 text-indigo-300">
+    <div class="flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-zinc-950 bg-white/60 p-8 text-center">
+      <span class="flex h-14 w-14 -rotate-6 items-center justify-center rounded-2xl border-2 border-zinc-950 bg-yellow-300 text-zinc-950 shadow-[3px_3px_0_#09090b]">
         <SpeakerIcon class="h-7 w-7" />
       </span>
       <div>
-        <p class="font-medium text-zinc-200">Ta soundbox est vide</p>
-        <p class="mt-1 text-sm text-zinc-500">Glisse un fichier audio ici, ou ajoute-le avec le bouton.</p>
+        <p class="text-xl font-extrabold">Ta soundbox est vide</p>
+        <p class="mt-1 text-sm text-zinc-600">Glisse un fichier audio ici, ou ajoute-le avec le bouton.</p>
       </div>
       <button type="button" data-action="upload" class={BTN_PRIMARY}>
         <PlusIcon />
@@ -336,9 +358,9 @@ const Modal: FC<{ id: string; labelledBy: string; children?: Child }> = ({ id, l
     aria-modal="true"
     aria-labelledby={labelledBy}
     data-modal
-    class="fixed inset-0 z-30 hidden items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+    class="fixed inset-0 z-30 hidden items-end justify-center bg-zinc-950/40 p-4 backdrop-blur-sm sm:items-center"
   >
-    <div class="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl shadow-black/50">
+    <div class="w-full max-w-md rounded-3xl border-2 border-zinc-950 bg-white p-6 text-zinc-950 shadow-[6px_6px_0_#09090b]">
       {children}
     </div>
   </div>
@@ -405,8 +427,8 @@ const CLIENT_SCRIPT = `
   let toastTimer = null;
   function showToast(message, isError) {
     toast.textContent = message;
-    toast.classList.toggle("border-red-500/60", Boolean(isError));
-    toast.classList.toggle("text-red-300", Boolean(isError));
+    toast.classList.toggle("bg-white", !isError);
+    toast.classList.toggle("bg-red-300", Boolean(isError));
     toast.classList.remove("opacity-0", "translate-y-2");
     toast.classList.add("opacity-100");
     clearTimeout(toastTimer);
@@ -493,9 +515,9 @@ const CLIENT_SCRIPT = `
       const ws = WaveSurfer.create({
         container: trimWaveform,
         height: 80,
-        waveColor: "#52525b",
-        progressColor: "#818cf8",
-        cursorColor: "#e4e4e7",
+        waveColor: "#71717a",
+        progressColor: "#ec4899",
+        cursorColor: "#09090b",
         plugins: [regions],
       });
       state.trim = { ws, region: null };
@@ -505,7 +527,7 @@ const CLIENT_SCRIPT = `
         state.trim.region = regions.addRegion({
           start: 0,
           end: duration,
-          color: "rgba(99, 102, 241, 0.25)",
+          color: "rgba(250, 204, 21, 0.35)",
           minLength: 0.1,
         });
         trimPlay.disabled = false;
@@ -557,7 +579,7 @@ const CLIENT_SCRIPT = `
     if (trimToggle.checked) setupTrim(file);
     nameFileLabel.textContent = file.name;
     nameFileLabel.classList.remove("text-zinc-500");
-    nameFileLabel.classList.add("text-zinc-100");
+    nameFileLabel.classList.add("text-zinc-950");
     nameModalError.textContent = "";
     if (!state.nameTouched || !nameInput.value.trim()) {
       nameInput.value = file.name.replace(/\\.[^/.]+$/, "");
@@ -577,7 +599,7 @@ const CLIENT_SCRIPT = `
     trimWarning.classList.add("hidden");
     setTrimEnabled(false);
     nameFileLabel.textContent = "Aucun fichier sélectionné";
-    nameFileLabel.classList.remove("text-zinc-100");
+    nameFileLabel.classList.remove("text-zinc-950");
     nameFileLabel.classList.add("text-zinc-500");
     nameInput.value = "";
     nameModalError.textContent = "";
@@ -813,6 +835,25 @@ const CLIENT_SCRIPT = `
     }
   });
 
+  document.querySelectorAll('[data-action="favorite"]').forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        const res = await fetch("/files/" + btn.dataset.id + "/favorite", {
+          method: btn.dataset.favorite === "true" ? "DELETE" : "PUT",
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || "Impossible de modifier les favoris");
+        }
+        reload();
+      } catch (err) {
+        showToast(err.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
+
   document.querySelectorAll('[data-action="edit"]').forEach((btn) => {
     btn.addEventListener("click", () => openEditModal(btn.dataset.id, btn.dataset.name));
   });
@@ -1034,252 +1075,271 @@ const CLIENT_SCRIPT = `
 
 export const FilesPage: FC<{
   files: FileRecord[];
+  favorites: FileRecord[];
   pagination: Pagination;
   query: string;
   guilds: GuildVoiceInfo[];
   defaultChannelId?: string;
   userChannelId?: string;
   username?: string;
-}> = ({ files, pagination, query, guilds, defaultChannelId, userChannelId, username }) => (
-  <html lang="fr" style="color-scheme: dark">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Soundbox</title>
-      <link rel="icon" href="/favicon.ico" />
-      <script src="https://cdn.tailwindcss.com"></script>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `tailwind.config = { darkMode: "class" }; document.documentElement.classList.add("dark");`,
-        }}
-      ></script>
-    </head>
-    <body class="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 antialiased">
-      <header class="sticky top-0 z-20 border-b border-zinc-800/80 bg-zinc-950/85 backdrop-blur">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
-          <a href="/" class="flex items-center gap-2.5 font-semibold tracking-tight">
-            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
-              <SpeakerIcon />
-            </span>
-            Soundbox
-          </a>
+}> = ({ files, favorites, pagination, query, guilds, defaultChannelId, userChannelId, username }) => {
+  const favoriteIds = new Set(favorites.map((file) => file.id));
+  return (
+    <html lang="fr" style="color-scheme: light">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Soundbox</title>
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="stylesheet" href={STICKER_FONT_URL} />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style dangerouslySetInnerHTML={{ __html: STICKER_CSS }}></style>
+      </head>
+      <body class={`flex min-h-screen flex-col ${STICKER_BODY}`}>
+        <header class="sticky top-0 z-20 border-b-2 border-zinc-950 bg-[#e6ebf1]/90 backdrop-blur">
+          <div class="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
+            <a
+              href="/"
+              class="inline-block -rotate-2 border-2 border-zinc-950 bg-yellow-300 px-2 text-2xl font-extrabold tracking-tight shadow-[3px_3px_0_#09090b] transition hover:rotate-0"
+            >
+              Soundbox!
+            </a>
 
-          <div class="order-last flex w-full sm:order-none sm:ml-auto sm:w-auto sm:flex-1 sm:justify-end">
-            <ChannelPicker guilds={guilds} defaultChannelId={defaultChannelId} userChannelId={userChannelId} />
+            <div class="order-last flex w-full sm:order-none sm:ml-auto sm:w-auto sm:flex-1 sm:justify-end">
+              <ChannelPicker guilds={guilds} defaultChannelId={defaultChannelId} userChannelId={userChannelId} />
+              <button
+                type="button"
+                id="stop-sound"
+                class={`${BTN_TOOL} ${VARIANT_INK} ml-2`}
+                title="Arrêter le son en cours"
+                aria-label="Arrêter le son en cours"
+              >
+                <StopIcon />
+                <span class="hidden sm:inline">Stop</span>
+              </button>
+            </div>
+
+            <div class="ml-auto flex items-center gap-3 sm:ml-0">
+              {username ? <span class="hidden max-w-[10rem] truncate text-sm font-bold text-zinc-600 md:inline">{username}</span> : null}
+              <form method="post" action="/auth/logout" class="m-0 flex">
+                <button
+                  type="submit"
+                  class={`${BTN_TOOL} ${VARIANT_SECONDARY}`}
+                  title="Déconnexion"
+                  aria-label="Déconnexion"
+                >
+                  <LogoutIcon />
+                  <span class="hidden sm:inline">Déconnexion</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </header>
+
+        <main class="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
+          <div class="mb-5">
+            <h1 class="text-3xl font-extrabold tracking-tight">Sons</h1>
+            <p class="mt-1 text-sm font-medium text-zinc-600">
+              {query
+                ? `${pagination.total} résultat${pagination.total > 1 ? "s" : ""} pour « ${query} »`
+                : `${pagination.total} son${pagination.total > 1 ? "s" : ""} · clique sur un son pour le jouer`}
+            </p>
+          </div>
+
+          <p
+            id="channel-warning"
+            role="status"
+            class="mb-5 hidden rounded-xl border-2 border-zinc-950 bg-yellow-200 px-4 py-3 text-sm font-semibold text-zinc-950 shadow-[3px_3px_0_#09090b]"
+          ></p>
+
+          <div class="mb-8 flex gap-3">
+            <SearchBar query={query} />
             <button
               type="button"
-              id="stop-sound"
-              class={`${BTN_CORE} ${VARIANT_SECONDARY} ml-2 h-10 w-10 rounded-lg sm:w-auto sm:px-3`}
-              title="Arrêter le son en cours"
-              aria-label="Arrêter le son en cours"
+              data-action="upload"
+              class={`${BTN_TOOL} ${VARIANT_PRIMARY}`}
+              title="Ajouter un son"
+              aria-label="Ajouter un son"
             >
-              <StopIcon />
-              <span class="hidden sm:inline">Stop</span>
+              <PlusIcon />
+              <span class="hidden sm:inline">Ajouter un son</span>
+            </button>
+            <button
+              type="button"
+              data-action="youtube"
+              class={`${BTN_TOOL} ${VARIANT_SECONDARY}`}
+              title="Importer depuis YouTube"
+              aria-label="Importer depuis YouTube"
+            >
+              <YoutubeIcon />
+              <span class="hidden sm:inline">YouTube</span>
             </button>
           </div>
 
-          <div class="ml-auto flex items-center gap-1 sm:ml-0">
-            {username ? <span class="hidden max-w-[10rem] truncate text-sm text-zinc-400 md:inline">{username}</span> : null}
-            <form method="post" action="/auth/logout" class="m-0 flex">
-              <button
-                type="submit"
-                class={`${BTN_CORE} ${VARIANT_SECONDARY} h-10 w-10 rounded-lg sm:w-auto sm:px-3`}
-                title="Déconnexion"
-                aria-label="Déconnexion"
-              >
-                <LogoutIcon />
-                <span class="hidden sm:inline">Déconnexion</span>
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+          {favorites.length > 0 ? (
+            <section
+              class="mb-10 rounded-3xl border-2 border-zinc-950 bg-white p-4 shadow-[6px_6px_0_#09090b] sm:p-5"
+              aria-labelledby="favorites-title"
+            >
+              <h2 id="favorites-title" class="mb-4 flex items-center gap-2 text-xl font-extrabold tracking-tight">
+                Favoris
+                <span class="rounded-full bg-zinc-950 px-2.5 py-0.5 text-xs font-bold text-white">{favorites.length}</span>
+              </h2>
+              <ul class={PAD_GRID}>
+                {favorites.map((file) => (
+                  <SoundPad file={file} favorite />
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
-      <main class="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
-        <div class="mb-5">
-          <h1 class="text-2xl font-semibold tracking-tight">Sons</h1>
-          <p class="mt-0.5 text-sm text-zinc-500">
-            {query
-              ? `${pagination.total} résultat${pagination.total > 1 ? "s" : ""} pour « ${query} »`
-              : `${pagination.total} son${pagination.total > 1 ? "s" : ""} · clique sur un son pour le jouer`}
-          </p>
-        </div>
+          <section id="dropzone" class="relative flex flex-1 flex-col">
+            {files.length === 0 ? (
+              <EmptyState query={query} />
+            ) : (
+              <ul class={PAD_GRID}>
+                {files.map((file) => (
+                  <SoundPad file={file} favorite={favoriteIds.has(file.id)} />
+                ))}
+              </ul>
+            )}
 
-        <p
-          id="channel-warning"
-          role="status"
-          class="mb-5 hidden rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
-        ></p>
-
-        <div class="mb-6 flex gap-2">
-          <SearchBar query={query} />
-          <button
-            type="button"
-            data-action="upload"
-            class={`${BTN_CORE} ${VARIANT_PRIMARY} h-10 w-10 rounded-lg sm:w-auto sm:px-4`}
-            title="Ajouter un son"
-            aria-label="Ajouter un son"
-          >
-            <PlusIcon />
-            <span class="hidden sm:inline">Ajouter un son</span>
-          </button>
-          <button
-            type="button"
-            data-action="youtube"
-            class={`${BTN_CORE} ${VARIANT_SECONDARY} h-10 w-10 rounded-lg sm:w-auto sm:px-4`}
-            title="Importer depuis YouTube"
-            aria-label="Importer depuis YouTube"
-          >
-            <YoutubeIcon />
-            <span class="hidden sm:inline">YouTube</span>
-          </button>
-        </div>
-
-        <section id="dropzone" class="relative flex flex-1 flex-col">
-          {files.length === 0 ? (
-            <EmptyState query={query} />
-          ) : (
-            <ul class="grid content-start grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {files.map((file) => (
-                <SoundPad file={file} />
-              ))}
-            </ul>
-          )}
-
-          <div
-            id="drop-overlay"
-            class="pointer-events-none absolute -inset-2 z-10 hidden flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-indigo-500 bg-indigo-950/85 text-indigo-200"
-          >
-            <PlusIcon />
-            <span class="text-lg font-medium">Dépose le fichier audio ici</span>
-          </div>
-          <PaginationBar pagination={pagination} query={query} />
-        </section>
-
-        <input type="file" id="file-input" accept="audio/*" class="hidden" />
-      </main>
-
-      <Modal id="name-modal" labelledBy="name-modal-title">
-        <h2 id="name-modal-title" class="mb-5 text-lg font-semibold">
-          Ajouter un son
-        </h2>
-
-        <div id="name-file-row" class="mb-4">
-          <span class="mb-1.5 block text-sm text-zinc-400">Fichier audio</span>
-          <div class="flex items-center gap-3 rounded-lg border border-dashed border-zinc-700 p-2">
-            <button type="button" id="modal-choose-btn" class={BTN_SECONDARY_SM}>
-              Choisir…
-            </button>
-            <span id="name-file-label" class="min-w-0 flex-1 truncate text-sm text-zinc-500">
-              Aucun fichier sélectionné
-            </span>
-          </div>
-        </div>
-
-        <div id="trim-row" class="mb-4 hidden">
-          <div id="trim-toggle-row">
-            <label class="flex w-fit cursor-pointer items-center gap-2 text-sm text-zinc-300">
-              <input type="checkbox" id="trim-toggle" class="h-4 w-4 accent-indigo-500" />
-              Recouper le son
-            </label>
-          </div>
-          <p id="trim-warning" class="hidden rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-            Le son d'origine sera remplacé par le passage sélectionné.
-          </p>
-          <div id="trim-panel" class="mt-3 hidden">
-            <div id="trim-waveform" class="min-h-[80px] rounded-lg bg-zinc-950 px-2"></div>
-            <div class="mt-2 flex items-center gap-3">
-              <button type="button" id="trim-play" class={BTN_SECONDARY_SM} disabled>
-                <PlayIcon />
-                <span id="trim-play-label">Écouter l'extrait</span>
-              </button>
-              <span id="trim-range" class="text-sm tabular-nums text-zinc-400"></span>
+            <div
+              id="drop-overlay"
+              class="pointer-events-none absolute -inset-2 z-10 hidden flex-col items-center justify-center gap-2 rounded-3xl border-4 border-dashed border-zinc-950 bg-pink-300/90 text-zinc-950"
+            >
+              <PlusIcon />
+              <span class="text-2xl font-extrabold">Dépose le fichier audio ici</span>
             </div>
-            <p id="trim-status" class="mt-2 text-sm text-zinc-500"></p>
+            <PaginationBar pagination={pagination} query={query} />
+          </section>
+
+          <input type="file" id="file-input" accept="audio/*" class="hidden" />
+        </main>
+
+        <Modal id="name-modal" labelledBy="name-modal-title">
+          <h2 id="name-modal-title" class="mb-5 text-2xl font-extrabold tracking-tight">
+            Ajouter un son
+          </h2>
+
+          <div id="name-file-row" class="mb-4">
+            <span class="mb-1.5 block text-sm font-bold text-zinc-700">Fichier audio</span>
+            <div class="flex items-center gap-3 rounded-xl border-2 border-dashed border-zinc-950 p-2">
+              <button type="button" id="modal-choose-btn" class={BTN_SECONDARY_SM}>
+                Choisir…
+              </button>
+              <span id="name-file-label" class="min-w-0 flex-1 truncate text-sm text-zinc-500">
+                Aucun fichier sélectionné
+              </span>
+            </div>
           </div>
-        </div>
 
-        <label for="name-input" class="mb-1.5 block text-sm text-zinc-400">
-          Nom à afficher
-        </label>
-        <input type="text" id="name-input" maxlength={200} class={`${FIELD} h-10 w-full px-3`} />
-        <div id="name-modal-error" class="mt-2 min-h-[1.25rem] text-sm text-red-400" role="alert"></div>
-
-        <div class="mt-4 flex justify-end gap-2">
-          <button type="button" class={BTN_SECONDARY} id="name-cancel">
-            Annuler
-          </button>
-          <button type="button" class={BTN_PRIMARY} id="name-confirm">
-            Valider
-          </button>
-        </div>
-      </Modal>
-
-      <Modal id="yt-modal" labelledBy="yt-modal-title">
-        <h2 id="yt-modal-title" class="mb-5 text-lg font-semibold">
-          Importer depuis YouTube
-        </h2>
-
-        <label for="yt-url" class="mb-1.5 block text-sm text-zinc-400">
-          Lien de la vidéo
-        </label>
-        <input
-          type="url"
-          id="yt-url"
-          placeholder="https://www.youtube.com/watch?v=…"
-          maxlength={500}
-          class={`${FIELD} h-10 w-full px-3`}
-        />
-
-        <div id="yt-progress" class="mt-4 hidden">
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
-            <div id="yt-progress-bar" class="h-full w-0 rounded-full bg-indigo-500 transition-[width] duration-200"></div>
+          <div id="trim-row" class="mb-4 hidden">
+            <div id="trim-toggle-row">
+              <label class="flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-zinc-800">
+                <input type="checkbox" id="trim-toggle" class="h-4 w-4 accent-pink-500" />
+                Recouper le son
+              </label>
+            </div>
+            <p id="trim-warning" class="hidden rounded-xl border-2 border-zinc-950 bg-yellow-200 px-3 py-2 text-sm font-semibold text-zinc-950">
+              Le son d'origine sera remplacé par le passage sélectionné.
+            </p>
+            <div id="trim-panel" class="mt-3 hidden">
+              <div id="trim-waveform" class="min-h-[80px] rounded-xl border-2 border-zinc-950 bg-zinc-100 px-2"></div>
+              <div class="mt-2 flex items-center gap-3">
+                <button type="button" id="trim-play" class={BTN_SECONDARY_SM} disabled>
+                  <PlayIcon />
+                  <span id="trim-play-label">Écouter l'extrait</span>
+                </button>
+                <span id="trim-range" class="text-sm font-bold tabular-nums text-zinc-700"></span>
+              </div>
+              <p id="trim-status" class="mt-2 text-sm text-zinc-600"></p>
+            </div>
           </div>
-          <p id="yt-status" class="mt-2 truncate text-sm text-zinc-400"></p>
-        </div>
 
-        <label class="mt-4 flex w-fit cursor-pointer items-center gap-2 text-sm text-zinc-300">
-          <input type="checkbox" id="yt-trim" class="h-4 w-4 accent-indigo-500" />
-          Couper le son après l'import
-        </label>
+          <label for="name-input" class="mb-1.5 block text-sm font-bold text-zinc-700">
+            Nom à afficher
+          </label>
+          <input type="text" id="name-input" maxlength={200} class={`${FIELD} h-10 w-full px-3`} />
+          <div id="name-modal-error" class="mt-2 min-h-[1.25rem] text-sm font-semibold text-red-600" role="alert"></div>
 
-        <div id="yt-error" class="mt-2 min-h-[1.25rem] text-sm text-red-400" role="alert"></div>
+          <div class="mt-4 flex justify-end gap-2">
+            <button type="button" class={BTN_SECONDARY} id="name-cancel">
+              Annuler
+            </button>
+            <button type="button" class={BTN_PRIMARY} id="name-confirm">
+              Valider
+            </button>
+          </div>
+        </Modal>
 
-        <div class="mt-4 flex justify-end gap-2">
-          <button type="button" class={BTN_SECONDARY} id="yt-cancel">
-            Annuler
-          </button>
-          <button type="button" class={BTN_PRIMARY} id="yt-confirm">
-            <YoutubeIcon />
-            Importer
-          </button>
-        </div>
-      </Modal>
+        <Modal id="yt-modal" labelledBy="yt-modal-title">
+          <h2 id="yt-modal-title" class="mb-5 text-2xl font-extrabold tracking-tight">
+            Importer depuis YouTube
+          </h2>
 
-      <Modal id="delete-modal" labelledBy="delete-modal-title">
-        <h2 id="delete-modal-title" class="mb-2 text-lg font-semibold">
-          Supprimer ce son ?
-        </h2>
-        <p id="delete-modal-text" class="mb-6 text-sm text-zinc-400"></p>
-        <div class="flex justify-end gap-2">
-          <button type="button" class={BTN_SECONDARY} id="delete-cancel">
-            Annuler
-          </button>
-          <button type="button" class={BTN_DANGER} id="delete-confirm">
-            <DeleteIcon />
-            Supprimer
-          </button>
-        </div>
-      </Modal>
+          <label for="yt-url" class="mb-1.5 block text-sm font-bold text-zinc-700">
+            Lien de la vidéo
+          </label>
+          <input
+            type="url"
+            id="yt-url"
+            placeholder="https://www.youtube.com/watch?v=…"
+            maxlength={500}
+            class={`${FIELD} h-10 w-full px-3`}
+          />
 
-      <div
-        id="toast"
-        role="status"
-        aria-live="polite"
-        class="pointer-events-none fixed bottom-5 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-2 truncate rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-100 opacity-0 shadow-lg shadow-black/40 transition duration-200"
-      ></div>
+          <div id="yt-progress" class="mt-4 hidden">
+            <div class="h-3 w-full overflow-hidden rounded-full border-2 border-zinc-950 bg-zinc-100">
+              <div id="yt-progress-bar" class="h-full w-0 bg-pink-400 transition-[width] duration-200"></div>
+            </div>
+            <p id="yt-status" class="mt-2 truncate text-sm text-zinc-600"></p>
+          </div>
 
-      <script dangerouslySetInnerHTML={{ __html: CLIENT_SCRIPT }}></script>
-    </body>
-  </html>
-);
+          <label class="mt-4 flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-zinc-800">
+            <input type="checkbox" id="yt-trim" class="h-4 w-4 accent-pink-500" />
+            Couper le son après l'import
+          </label>
+
+          <div id="yt-error" class="mt-2 min-h-[1.25rem] text-sm font-semibold text-red-600" role="alert"></div>
+
+          <div class="mt-4 flex justify-end gap-2">
+            <button type="button" class={BTN_SECONDARY} id="yt-cancel">
+              Annuler
+            </button>
+            <button type="button" class={BTN_PRIMARY} id="yt-confirm">
+              <YoutubeIcon />
+              Importer
+            </button>
+          </div>
+        </Modal>
+
+        <Modal id="delete-modal" labelledBy="delete-modal-title">
+          <h2 id="delete-modal-title" class="mb-2 text-2xl font-extrabold tracking-tight">
+            Supprimer ce son ?
+          </h2>
+          <p id="delete-modal-text" class="mb-6 text-sm text-zinc-600"></p>
+          <div class="flex justify-end gap-2">
+            <button type="button" class={BTN_SECONDARY} id="delete-cancel">
+              Annuler
+            </button>
+            <button type="button" class={BTN_DANGER} id="delete-confirm">
+              <DeleteIcon />
+              Supprimer
+            </button>
+          </div>
+        </Modal>
+
+        <div
+          id="toast"
+          role="status"
+          aria-live="polite"
+          class="pointer-events-none fixed bottom-5 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-2 truncate rounded-xl border-2 border-zinc-950 bg-white px-4 py-2.5 text-sm font-bold text-zinc-950 opacity-0 shadow-[3px_3px_0_#09090b] transition duration-200"
+        ></div>
+
+        <script dangerouslySetInnerHTML={{ __html: CLIENT_SCRIPT }}></script>
+      </body>
+    </html>
+  );
+};
