@@ -102,6 +102,24 @@ export function getFileById(id: string): FileRecord | undefined {
   };
 }
 
+/** A user's favorite sounds, in the order they were starred. */
+export function listFavorites(userId: string): FileRecord[] {
+  const rows = db
+    .prepare(
+      `SELECT files.id, files.display_name, files.filename, files.created_at FROM favorites
+       JOIN files ON files.id = favorites.file_id
+       WHERE favorites.user_id = ? ORDER BY favorites.created_at, files.display_name`,
+    )
+    .all(userId) as unknown as FileRow[];
+
+  return rows.map((row) => ({
+    id: row.id,
+    displayName: row.display_name,
+    filename: row.filename,
+    createdAt: row.created_at,
+  }));
+}
+
 export function searchFiles(query: string, limit = 25): FileRecord[] {
   const rows = db
     .prepare(
@@ -286,9 +304,35 @@ filesRoute.delete("/:id", async (c) => {
   }
 
   db.prepare("DELETE FROM files WHERE id = ?").run(id);
+  db.prepare("DELETE FROM favorites WHERE file_id = ?").run(id);
   await rm(filePathFor(file.id, file.filename), { force: true });
 
   return c.json({ id, deleted: true });
+});
+
+filesRoute.put("/:id/favorite", (c) => {
+  const user = getCurrentUser(c);
+  if (!user) {
+    throw new HTTPException(401, { message: "Unauthenticated" });
+  }
+  const id = c.req.param("id");
+  if (!getFileById(id)) {
+    throw new HTTPException(404, { message: "File not found" });
+  }
+
+  db.prepare("INSERT OR IGNORE INTO favorites (user_id, file_id) VALUES (?, ?)").run(user.userId, id);
+  return c.json({ id, favorite: true });
+});
+
+filesRoute.delete("/:id/favorite", (c) => {
+  const user = getCurrentUser(c);
+  if (!user) {
+    throw new HTTPException(401, { message: "Unauthenticated" });
+  }
+  const id = c.req.param("id");
+
+  db.prepare("DELETE FROM favorites WHERE user_id = ? AND file_id = ?").run(user.userId, id);
+  return c.json({ id, favorite: false });
 });
 
 // Only a hint for the browser: wavesurfer decodes whatever bytes it gets.

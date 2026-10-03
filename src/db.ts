@@ -26,5 +26,12 @@ db.exec(`
     username TEXT NOT NULL,
     expires_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS favorites (
+    user_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, file_id)
+  );
 `);
 

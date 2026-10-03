@@ -5,7 +5,7 @@ import { getCurrentUser, requireAuth } from "./auth/session.js";
 import { guildsSharedWith } from "./bot.js";
 import { config } from "./config.js";
 import { authRoute } from "./routes/auth.js";
-import { filesRoute, listFiles } from "./routes/files.js";
+import { filesRoute, listFavorites, listFiles } from "./routes/files.js";
 import { listGuildVoiceInfo, pickDefaultChannelId } from "./voice/channels.js";
 import { FilesPage } from "./views/files-page.js";
 
@@ -24,6 +24,7 @@ app.get("/", async (c) => {
   const { files, pagination } = listFiles(page, PAGE_SIZE, query);
 
   const user = getCurrentUser(c);
+  const favorites = user ? listFavorites(user.userId) : [];
   const guilds = listGuildVoiceInfo(user ? await guildsSharedWith(user.userId) : []);
   const channels = guilds.flatMap((guild) => guild.channels);
   const defaultChannelId = pickDefaultChannelId(channels, user?.userId);
@@ -33,6 +34,7 @@ app.get("/", async (c) => {
     "<!DOCTYPE html>" +
     <FilesPage
       files={files}
+      favorites={favorites}
       pagination={pagination}
       query={query}
       guilds={guilds}
